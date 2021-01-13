@@ -496,6 +496,14 @@ class Env(gym.Env, metaclass=ABCMeta):
             type_id, edge, lane_index, pos, speed = \
                 self.initial_state[veh_id]
 
+            # bmil edit
+            veh_id = str(veh_id)
+            type_id = str(type_id)
+            edge = str(edge)
+            lane_index = str(lane_index)
+            pos = float(pos)
+            speed = float(speed)
+
             try:
                 self.k.vehicle.add(
                     veh_id=veh_id,

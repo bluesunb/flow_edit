@@ -243,11 +243,50 @@ class BaseKernelNetwork(object):
         elif initial_config.spacing == 'custom':
             startpositions, startlanes = self.gen_custom_start_pos(
                 initial_config, num_vehicles)
+        #bmil edit
+        elif initial_config.spacing == 'my':
+            startpositions, startlanes = self.gen_my_start_pos(
+                initial_config, num_vehicles)
+        elif initial_config.spacing == 'my2':
+            startpositions, startlanes = self.gen_my_start_pos(
+                initial_config, num_vehicles)
         else:
             raise FatalFlowError('"spacing" argument in initial_config does '
                                  'not contain a valid option')
 
         return startpositions, startlanes
+
+    def gen_my_start_pos(self, initial_config, num_vehicles):
+        startpos, startlanes = self.gen_even_start_pos(initial_config, num_vehicles)
+        for i in range(0, num_vehicles, 2):
+            startlanes[i] = 1
+        return startpos, startlanes
+
+    def gen_my_start_pos2(self, initial_config, num_vehicles):
+        length = self.network.net_params.additional_params['length']
+        min_gap = initial_config.min_gap
+        startpos, startlane = [], []
+        inline_num = initial_config.additional_params['inline_veh_nums']
+        outline_num = initial_config.additional_params['outline_veh_nums']
+        if num_vehicles != inline_num+outline_num:
+            raise ValueError('Vehicle nums are not match')
+
+        edges = initial_config.edges_distribution.keys()
+        edge_length = length//4
+
+        for o in range(outline_num):
+            pos = o*(VEHICLE_LENGTH+min_gap)
+            edge= edges[int(pos//edge_length)]
+            startpos.append((edge, pos % edge_length))
+            startlane.append(1)
+        for i in range(inline_num):
+            pos = i*(VEHICLE_LENGTH+min_gap)
+            edge= edges[int(pos//edge_length)]
+            startpos.append((edge, pos % edge_length))
+            startlane.append(0)
+
+        return startpos, startlane
+
 
     def gen_even_start_pos(self, initial_config, num_vehicles):
         """Generate uniformly spaced starting positions.

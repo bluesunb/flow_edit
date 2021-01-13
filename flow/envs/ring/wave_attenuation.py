@@ -107,8 +107,7 @@ class WaveAttenuationEnv(Env):
 
     def _apply_rl_actions(self, rl_actions):
         """See class definition."""
-        self.k.vehicle.apply_acceleration(
-            self.k.vehicle.get_rl_ids(), rl_actions)
+        self.k.vehicle.apply_acceleration(self.k.vehicle.get_rl_ids(), rl_actions)
 
     def compute_reward(self, rl_actions, **kwargs):
         """See class definition."""

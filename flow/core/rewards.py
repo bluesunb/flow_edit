@@ -87,6 +87,9 @@ def average_velocity(env, fail=False):
 
     return np.mean(vel)
 
+#bmil edit
+# def
+
 
 def rl_forward_progress(env, gain=0.1):
     """Rewared function used to reward the RL vehicles for travelling forward.
@@ -300,7 +303,7 @@ def punish_rl_lane_changes(env, penalty=1):
     """
     total_lane_change_penalty = 0
     for veh_id in env.k.vehicle.get_rl_ids():
-        if env.k.vehicle.get_last_lc(veh_id) == env.timer:
+        if env.k.vehicle.get_last_lc(veh_id) == env.time:
             total_lane_change_penalty -= penalty
 
     return total_lane_change_penalty

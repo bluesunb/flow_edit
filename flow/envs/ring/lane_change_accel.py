@@ -6,6 +6,8 @@ from flow.core import rewards
 from gym.spaces.box import Box
 import numpy as np
 
+from time import asctime
+
 ADDITIONAL_ENV_PARAMS = {
     # maximum acceleration for autonomous vehicles, in m/s^2
     "max_accel": 3,
@@ -103,13 +105,23 @@ class LaneChangeAccelEnv(AccelEnv):
         # perspective
         reward = rewards.desired_velocity(self, fail=kwargs["fail"])
 
-        # punish excessive lane changes by reducing the reward by a set value
-        # every time an rl car changes lanes (10% of max reward)
+        #bmil edit
+        penalty = 0
         for veh_id in self.k.vehicle.get_rl_ids():
             if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
-                reward -= 0.1
+                penalty -= 0.25
 
-        return reward
+        with open('/home/bmil3/flow/examples/log/lane_change_accel_01.txt', 'a') as f:
+            f.write(f'{asctime()} desired_v : {reward},\tpenalty : {penalty}\n')
+
+        return reward-penalty
+        # punish excessive lane changes by reducing the reward by a set value
+        # every time an rl car changes lanes (10% of max reward)
+        # for veh_id in self.k.vehicle.get_rl_ids():
+        #     if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
+        #         reward -= 0.1
+
+        # return reward
 
     def get_state(self):
         """See class definition."""
@@ -139,6 +151,16 @@ class LaneChangeAccelEnv(AccelEnv):
             veh_id for veh_id in self.sorted_ids
             if veh_id in self.k.vehicle.get_rl_ids()
         ]
+
+        # bmil edit
+        for i in range(len(direction)):
+            d = direction[i]
+            if d >= -1 and d < -0.3:
+                direction[i] = -1
+            elif 0.3 < d and d <= 1:
+                direction[i] = 1
+            else:
+                direction[i] = 0
 
         # represents vehicles that are allowed to change lanes
         non_lane_changing_veh = \
@@ -267,3 +289,548 @@ class LaneChangeAccelPOEnv(LaneChangeAccelEnv):
         # specify observed vehicles
         for veh_id in self.visible:
             self.k.vehicle.set_observed(veh_id)
+
+class MyLaneChangeAccelEnv(AccelEnv):
+    """
+    MyLaneChangeAccelEnv
+    penalty const = 0.1
+    lane change rate = 0.8 : 0.4: 0.8
+    """
+
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        for p in ADDITIONAL_ENV_PARAMS.keys():
+            if p not in env_params.additional_params:
+                raise KeyError(
+                    'Environment parameter "{}" not supplied'.format(p))
+
+        super().__init__(env_params, sim_params, network, simulator)
+
+    @property
+    def action_space(self):
+        """See class definition."""
+        max_decel = self.env_params.additional_params["max_decel"]
+        max_accel = self.env_params.additional_params["max_accel"]
+
+        lb = [-abs(max_decel), -1] * self.initial_vehicles.num_rl_vehicles
+        ub = [max_accel, 1] * self.initial_vehicles.num_rl_vehicles
+
+        return Box(np.array(lb), np.array(ub), dtype=np.float32)
+
+    @property
+    def observation_space(self):
+        """See class definition."""
+        return Box(
+            low=0,
+            high=1,
+            shape=(3 * self.initial_vehicles.num_vehicles, ),
+            dtype=np.float32)
+
+    def compute_reward(self, rl_actions, **kwargs):
+        """See class definition."""
+        # compute the system-level performance of vehicles from a velocity
+        # perspective
+        reward = rewards.desired_velocity(self, fail=kwargs["fail"])
+
+        # punish excessive lane changes by reducing the reward by a set value
+        # every time an rl car changes lanes (10% of max reward)
+        for veh_id in self.k.vehicle.get_rl_ids():
+            if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
+                reward -= 0.1
+
+        return reward
+
+    def get_state(self):
+        """See class definition."""
+        # normalizers
+        max_speed = self.k.network.max_speed()
+        length = self.k.network.length()
+        max_lanes = max(
+            self.k.network.num_lanes(edge)
+            for edge in self.k.network.get_edge_list())
+
+        speed = [self.k.vehicle.get_speed(veh_id) / max_speed
+                 for veh_id in self.sorted_ids]
+        pos = [self.k.vehicle.get_x_by_id(veh_id) / length
+               for veh_id in self.sorted_ids]
+        lane = [self.k.vehicle.get_lane(veh_id) / max_lanes
+                for veh_id in self.sorted_ids]
+
+        return np.array(speed + pos + lane)
+
+    def _apply_rl_actions(self, actions):
+        """See class definition."""
+        acceleration = actions[::2]
+        direction = actions[1::2]
+
+        # re-arrange actions according to mapping in observation space
+        sorted_rl_ids = [
+            veh_id for veh_id in self.sorted_ids
+            if veh_id in self.k.vehicle.get_rl_ids()
+        ]
+
+        # bmil edit
+        for i in range(len(direction)):
+            d = direction[i]
+            if d>=-1 and d<-0.2:
+                direction[i]=-1
+            elif 0.2<d and d<=1:
+                direction[i]=1
+            else:
+                direction[i]=0
+
+        # represents vehicles that are allowed to change lanes
+        non_lane_changing_veh = \
+            [self.time_counter <=
+             self.env_params.additional_params["lane_change_duration"]
+             + self.k.vehicle.get_last_lc(veh_id)
+             for veh_id in sorted_rl_ids]
+        # vehicle that are not allowed to change have their directions set to 0
+        direction[non_lane_changing_veh] = \
+            np.array([0] * sum(non_lane_changing_veh))
+
+
+        self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
+        self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction.astype(np.int))
+
+    def additional_command(self):
+        """Define which vehicles are observed for visualization purposes."""
+        # specify observed vehicles
+        if self.k.vehicle.num_rl_vehicles > 0:
+            for veh_id in self.k.vehicle.get_human_ids():
+                self.k.vehicle.set_observed(veh_id)
+
+class MyLaneChangeAccelEnv1(AccelEnv):
+    """
+    MyLaneChangeAccelEnv1
+    penalty const = 1
+    lane change rate = 0.8 : 0.4: 0.8
+    """
+
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        for p in ADDITIONAL_ENV_PARAMS.keys():
+            if p not in env_params.additional_params:
+                raise KeyError(
+                    'Environment parameter "{}" not supplied'.format(p))
+
+        super().__init__(env_params, sim_params, network, simulator)
+
+    @property
+    def action_space(self):
+        """See class definition."""
+        max_decel = self.env_params.additional_params["max_decel"]
+        max_accel = self.env_params.additional_params["max_accel"]
+
+        lb = [-abs(max_decel), -1] * self.initial_vehicles.num_rl_vehicles
+        ub = [max_accel, 1] * self.initial_vehicles.num_rl_vehicles
+
+        return Box(np.array(lb), np.array(ub), dtype=np.float32)
+
+    @property
+    def observation_space(self):
+        """See class definition."""
+        return Box(
+            low=0,
+            high=1,
+            shape=(3 * self.initial_vehicles.num_vehicles, ),
+            dtype=np.float32)
+
+    def compute_reward(self, rl_actions, **kwargs):
+        """See class definition."""
+        # compute the system-level performance of vehicles from a velocity
+        # perspective
+        reward = rewards.desired_velocity(self, fail=kwargs["fail"])
+
+        # punish excessive lane changes by reducing the reward by a set value
+        # every time an rl car changes lanes (10% of max reward)
+        for veh_id in self.k.vehicle.get_rl_ids():
+            if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
+                reward -= 1
+
+        return reward
+
+    def get_state(self):
+        """See class definition."""
+        # normalizers
+        max_speed = self.k.network.max_speed()
+        length = self.k.network.length()
+        max_lanes = max(
+            self.k.network.num_lanes(edge)
+            for edge in self.k.network.get_edge_list())
+
+        speed = [self.k.vehicle.get_speed(veh_id) / max_speed
+                 for veh_id in self.sorted_ids]
+        pos = [self.k.vehicle.get_x_by_id(veh_id) / length
+               for veh_id in self.sorted_ids]
+        lane = [self.k.vehicle.get_lane(veh_id) / max_lanes
+                for veh_id in self.sorted_ids]
+
+        return np.array(speed + pos + lane)
+
+    def _apply_rl_actions(self, actions):
+        """See class definition."""
+        acceleration = actions[::2]
+        direction = actions[1::2]
+
+        # re-arrange actions according to mapping in observation space
+        sorted_rl_ids = [
+            veh_id for veh_id in self.sorted_ids
+            if veh_id in self.k.vehicle.get_rl_ids()
+        ]
+
+        # bmil edit
+        for i in range(len(direction)):
+            d = direction[i]
+            if d>=-1 and d< -0.2:
+                direction[i]=-1
+            elif 0.2<d and d<=1:
+                direction[i]=1
+            else:
+                direction[i]=0
+
+        # represents vehicles that are allowed to change lanes
+        non_lane_changing_veh = \
+            [self.time_counter <=
+             self.env_params.additional_params["lane_change_duration"]
+             + self.k.vehicle.get_last_lc(veh_id)
+             for veh_id in sorted_rl_ids]
+        # vehicle that are not allowed to change have their directions set to 0
+        direction[non_lane_changing_veh] = \
+            np.array([0] * sum(non_lane_changing_veh))
+
+
+        self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
+        self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction.astype(np.int))
+
+    def additional_command(self):
+        """Define which vehicles are observed for visualization purposes."""
+        # specify observed vehicles
+        if self.k.vehicle.num_rl_vehicles > 0:
+            for veh_id in self.k.vehicle.get_human_ids():
+                self.k.vehicle.set_observed(veh_id)
+
+class MyLaneChangeAccelEnv2(AccelEnv):
+    """
+    MyLaneChangeAccelEnv2
+    penalty const = 0.1
+    lane change rate = 0.65 : 0.7: 0.65
+    """
+
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        for p in ADDITIONAL_ENV_PARAMS.keys():
+            if p not in env_params.additional_params:
+                raise KeyError(
+                    'Environment parameter "{}" not supplied'.format(p))
+
+        super().__init__(env_params, sim_params, network, simulator)
+
+    @property
+    def action_space(self):
+        """See class definition."""
+        max_decel = self.env_params.additional_params["max_decel"]
+        max_accel = self.env_params.additional_params["max_accel"]
+
+        lb = [-abs(max_decel), -1] * self.initial_vehicles.num_rl_vehicles
+        ub = [max_accel, 1] * self.initial_vehicles.num_rl_vehicles
+
+        return Box(np.array(lb), np.array(ub), dtype=np.float32)
+
+    @property
+    def observation_space(self):
+        """See class definition."""
+        return Box(
+            low=0,
+            high=1,
+            shape=(3 * self.initial_vehicles.num_vehicles, ),
+            dtype=np.float32)
+
+    def compute_reward(self, rl_actions, **kwargs):
+        """See class definition."""
+        # compute the system-level performance of vehicles from a velocity
+        # perspective
+        reward = rewards.desired_velocity(self, fail=kwargs["fail"])
+
+        # punish excessive lane changes by reducing the reward by a set value
+        # every time an rl car changes lanes (10% of max reward)
+        for veh_id in self.k.vehicle.get_rl_ids():
+            if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
+                reward -= 0.1
+
+        return reward
+
+    def get_state(self):
+        """See class definition."""
+        # normalizers
+        max_speed = self.k.network.max_speed()
+        length = self.k.network.length()
+        max_lanes = max(
+            self.k.network.num_lanes(edge)
+            for edge in self.k.network.get_edge_list())
+
+        speed = [self.k.vehicle.get_speed(veh_id) / max_speed
+                 for veh_id in self.sorted_ids]
+        pos = [self.k.vehicle.get_x_by_id(veh_id) / length
+               for veh_id in self.sorted_ids]
+        lane = [self.k.vehicle.get_lane(veh_id) / max_lanes
+                for veh_id in self.sorted_ids]
+
+        return np.array(speed + pos + lane)
+
+    def _apply_rl_actions(self, actions):
+        """See class definition."""
+        acceleration = actions[::2]
+        direction = actions[1::2]
+
+        # re-arrange actions according to mapping in observation space
+        sorted_rl_ids = [
+            veh_id for veh_id in self.sorted_ids
+            if veh_id in self.k.vehicle.get_rl_ids()
+        ]
+
+        # bmil edit
+        for i in range(len(direction)):
+            d = direction[i]
+            if d>=-1 and d< -0.35:
+                direction[i]=-1
+            elif 0.35<d and d<=1:
+                direction[i]=1
+            else:
+                direction[i]=0
+
+        # represents vehicles that are allowed to change lanes
+        non_lane_changing_veh = \
+            [self.time_counter <=
+             self.env_params.additional_params["lane_change_duration"]
+             + self.k.vehicle.get_last_lc(veh_id)
+             for veh_id in sorted_rl_ids]
+        # vehicle that are not allowed to change have their directions set to 0
+        direction[non_lane_changing_veh] = \
+            np.array([0] * sum(non_lane_changing_veh))
+
+
+        self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
+        self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction.astype(np.int))
+
+    def additional_command(self):
+        """Define which vehicles are observed for visualization purposes."""
+        # specify observed vehicles
+        if self.k.vehicle.num_rl_vehicles > 0:
+            for veh_id in self.k.vehicle.get_human_ids():
+                self.k.vehicle.set_observed(veh_id)
+
+class MyLaneChangeAccelEnv3(AccelEnv):
+    """
+    MyLaneChangeAccelEnv3
+    penalty const = 3
+    lane change rate = 0.7 : 0.6: 0.7
+    """
+
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        for p in ADDITIONAL_ENV_PARAMS.keys():
+            if p not in env_params.additional_params:
+                raise KeyError(
+                    'Environment parameter "{}" not supplied'.format(p))
+
+        super().__init__(env_params, sim_params, network, simulator)
+
+    @property
+    def action_space(self):
+        """See class definition."""
+        max_decel = self.env_params.additional_params["max_decel"]
+        max_accel = self.env_params.additional_params["max_accel"]
+
+        lb = [-abs(max_decel), -1] * self.initial_vehicles.num_rl_vehicles
+        ub = [max_accel, 1] * self.initial_vehicles.num_rl_vehicles
+
+        return Box(np.array(lb), np.array(ub), dtype=np.float32)
+
+    @property
+    def observation_space(self):
+        """See class definition."""
+        return Box(
+            low=0,
+            high=1,
+            shape=(3 * self.initial_vehicles.num_vehicles, ),
+            dtype=np.float32)
+
+    def compute_reward(self, rl_actions, **kwargs):
+        """See class definition."""
+        # compute the system-level performance of vehicles from a velocity
+        # perspective
+        reward = rewards.desired_velocity(self, fail=kwargs["fail"])
+
+        # punish excessive lane changes by reducing the reward by a set value
+        # every time an rl car changes lanes (10% of max reward)
+        for veh_id in self.k.vehicle.get_rl_ids():
+            if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
+                reward -= 3
+
+
+        return reward
+
+    def get_state(self):
+        """See class definition."""
+        # normalizers
+        max_speed = self.k.network.max_speed()
+        length = self.k.network.length()
+        max_lanes = max(
+            self.k.network.num_lanes(edge)
+            for edge in self.k.network.get_edge_list())
+
+        speed = [self.k.vehicle.get_speed(veh_id) / max_speed
+                 for veh_id in self.sorted_ids]
+        pos = [self.k.vehicle.get_x_by_id(veh_id) / length
+               for veh_id in self.sorted_ids]
+        lane = [self.k.vehicle.get_lane(veh_id) / max_lanes
+                for veh_id in self.sorted_ids]
+
+        return np.array(speed + pos + lane)
+
+    def _apply_rl_actions(self, actions):
+        """See class definition."""
+        acceleration = actions[::2]
+        direction = actions[1::2]
+
+        # re-arrange actions according to mapping in observation space
+        sorted_rl_ids = [
+            veh_id for veh_id in self.sorted_ids
+            if veh_id in self.k.vehicle.get_rl_ids()
+        ]
+
+        # bmil edit
+        for i in range(len(direction)):
+            d = direction[i]
+            if d>=-1 and d< -0.3:
+                direction[i]=-1
+            elif 0.3<d and d<=1:
+                direction[i]=1
+            else:
+                direction[i]=0
+
+        # represents vehicles that are allowed to change lanes
+        non_lane_changing_veh = \
+            [self.time_counter <=
+             self.env_params.additional_params["lane_change_duration"]
+             + self.k.vehicle.get_last_lc(veh_id)
+             for veh_id in sorted_rl_ids]
+        # vehicle that are not allowed to change have their directions set to 0
+        direction[non_lane_changing_veh] = \
+            np.array([0] * sum(non_lane_changing_veh))
+
+
+        self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
+        self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction.astype(np.int))
+
+    def additional_command(self):
+        """Define which vehicles are observed for visualization purposes."""
+        # specify observed vehicles
+        if self.k.vehicle.num_rl_vehicles > 0:
+            for veh_id in self.k.vehicle.get_human_ids():
+                self.k.vehicle.set_observed(veh_id)
+
+class MyLaneChangeAccelEnv4(AccelEnv):
+    """
+    MyLaneChangeAccelEnv4
+    penalty const = 0.1
+    lane change rate = 0.7 : 0.6: 0.7
+    """
+
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        for p in ADDITIONAL_ENV_PARAMS.keys():
+            if p not in env_params.additional_params:
+                raise KeyError(
+                    'Environment parameter "{}" not supplied'.format(p))
+
+        super().__init__(env_params, sim_params, network, simulator)
+
+    @property
+    def action_space(self):
+        """See class definition."""
+        max_decel = self.env_params.additional_params["max_decel"]
+        max_accel = self.env_params.additional_params["max_accel"]
+
+        lb = [-abs(max_decel), -1] * self.initial_vehicles.num_rl_vehicles
+        ub = [max_accel, 1] * self.initial_vehicles.num_rl_vehicles
+
+        return Box(np.array(lb), np.array(ub), dtype=np.float32)
+
+    @property
+    def observation_space(self):
+        """See class definition."""
+        return Box(
+            low=0,
+            high=1,
+            shape=(3 * self.initial_vehicles.num_vehicles, ),
+            dtype=np.float32)
+
+    def compute_reward(self, rl_actions, **kwargs):
+        """See class definition."""
+        # compute the system-level performance of vehicles from a velocity
+        # perspective
+        reward = rewards.desired_velocity(self, fail=kwargs["fail"])
+        tmp = reward
+        # punish excessive lane changes by reducing the reward by a set value
+        # every time an rl car changes lanes (10% of max reward)
+        for veh_id in self.k.vehicle.get_rl_ids():
+            if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
+                reward -= 0.1
+        return reward
+
+    def get_state(self):
+        """See class definition."""
+        # normalizers
+        max_speed = self.k.network.max_speed()
+        length = self.k.network.length()
+        max_lanes = max(
+            self.k.network.num_lanes(edge)
+            for edge in self.k.network.get_edge_list())
+
+        speed = [self.k.vehicle.get_speed(veh_id) / max_speed
+                 for veh_id in self.sorted_ids]
+        pos = [self.k.vehicle.get_x_by_id(veh_id) / length
+               for veh_id in self.sorted_ids]
+        lane = [self.k.vehicle.get_lane(veh_id) / max_lanes
+                for veh_id in self.sorted_ids]
+
+        return np.array(speed + pos + lane)
+
+    def _apply_rl_actions(self, actions):
+        """See class definition."""
+        acceleration = actions[::2]
+        direction = actions[1::2]
+
+        # re-arrange actions according to mapping in observation space
+        sorted_rl_ids = [
+            veh_id for veh_id in self.sorted_ids
+            if veh_id in self.k.vehicle.get_rl_ids()
+        ]
+
+        # bmil edit
+        for i in range(len(direction)):
+            d = direction[i]
+            if d>=-1 and d< -0.3:
+                direction[i]=-1
+            elif 0.3<d and d<=1:
+                direction[i]=1
+            else:
+                direction[i]=0
+
+        # represents vehicles that are allowed to change lanes
+        non_lane_changing_veh = \
+            [self.time_counter <=
+             self.env_params.additional_params["lane_change_duration"]
+             + self.k.vehicle.get_last_lc(veh_id)
+             for veh_id in sorted_rl_ids]
+        # vehicle that are not allowed to change have their directions set to 0
+        direction[non_lane_changing_veh] = \
+            np.array([0] * sum(non_lane_changing_veh))
+
+
+        self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
+        self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction.astype(np.int))
+
+    def additional_command(self):
+        """Define which vehicles are observed for visualization purposes."""
+        # specify observed vehicles
+        if self.k.vehicle.num_rl_vehicles > 0:
+            for veh_id in self.k.vehicle.get_human_ids():
+                self.k.vehicle.set_observed(veh_id)

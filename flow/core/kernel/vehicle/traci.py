@@ -19,6 +19,9 @@ WHITE = (255, 255, 255)
 CYAN = (0, 255, 255)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
+OLIVE_GREEN = (51,153,102)
+LIGHT_BLUE = (0, 153, 204)
+
 STEPS = 10
 rdelta = 255 / STEPS
 # smoothly go from red to green as the speed increases
@@ -618,15 +621,26 @@ class TraCIVehicle(KernelVehicle):
 
     def get_last_lc(self, veh_id, error=-1001):
         """See parent class."""
+        # if isinstance(veh_id, (list, np.ndarray)):
+        #     return [self.get_headway(vehID, error) for vehID in veh_id]
+        #
+        # if veh_id not in self.__rl_ids:
+        #     warnings.warn('Vehicle {} is not RL vehicle, "last_lc" term set to'
+        #                   ' {}.'.format(veh_id, error))
+        #     return error
+        # else:
+        #     return self.__vehicles.get(veh_id, {}).get("headway", error)
+
+        #bmil edit
         if isinstance(veh_id, (list, np.ndarray)):
-            return [self.get_headway(vehID, error) for vehID in veh_id]
+            return [self.get_last_lc(vehID, error) for vehID in veh_id]
 
         if veh_id not in self.__rl_ids:
             warnings.warn('Vehicle {} is not RL vehicle, "last_lc" term set to'
                           ' {}.'.format(veh_id, error))
             return error
         else:
-            return self.__vehicles.get(veh_id, {}).get("headway", error)
+            return self.__vehicles.get(veh_id, {}).get("last_lc", error)
 
     def get_acc_controller(self, veh_id, error=None):
         """See parent class."""
@@ -980,7 +994,7 @@ class TraCIVehicle(KernelVehicle):
         # if any of the directions are not -1, 0, or 1, raise a ValueError
         if any(d not in [-1, 0, 1] for d in direction):
             raise ValueError(
-                "Direction values for lane changes may only be: -1, 0, or 1.")
+                "Direction values for lane changes may only be: -1, 0, or 1.", direction)
 
         for i, veh_id in enumerate(veh_ids):
             # check for no lane change
@@ -989,10 +1003,11 @@ class TraCIVehicle(KernelVehicle):
 
             # compute the target lane, and clip it so vehicle don't try to lane
             # change out of range
+            # added : line 996 : int
             this_lane = self.get_lane(veh_id)
             this_edge = self.get_edge(veh_id)
             target_lane = min(
-                max(this_lane + direction[i], 0),
+                max(int(this_lane + direction[i]), 0),
                 self.master_kernel.network.num_lanes(this_edge) - 1)
 
             # perform the requested lane action action in TraCI
@@ -1052,6 +1067,12 @@ class TraCIVehicle(KernelVehicle):
                 if self._force_color_update or 'color' not in \
                         self.type_parameters[self.get_type(veh_id)]:
                     self.set_color(veh_id=veh_id, color=color)
+                #bmil edit
+                if 'inline' in veh_id:
+                    self.set_color(veh_id, OLIVE_GREEN)
+                elif 'outline' in veh_id:
+                    self.set_color(veh_id, LIGHT_BLUE)
+
             except (FatalTraCIError, TraCIException) as e:
                 print('Error when updating human vehicle colors:', e)
 
@@ -1065,6 +1086,11 @@ class TraCIVehicle(KernelVehicle):
                         self.set_color(veh_id=veh_id, color=color)
             except (FatalTraCIError, TraCIException) as e:
                 print('Error when updating human vehicle colors:', e)
+
+        #bmil edit
+        # for i in range(0,len(self.get_human_ids()),2):
+        #     self.set_color(self.get_human_ids()[i], GREEN)
+        # self.set_color(self.get_human_ids()[6], CYAN)
 
         # color vehicles by speed if desired
         if self._color_by_speed:
