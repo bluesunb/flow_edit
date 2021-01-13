@@ -21,7 +21,7 @@ from flow.envs.green_wave_env import GreenWaveTestEnv
 
 from flow.envs.ring.my_lane_change_accel import MyLaneChangeAccelEnv, MyLaneChangeAccelPOEnv
 from flow.envs.ring.lane_change_accel import MyLaneChangeAccelEnv1, \
-    MyLaneChangeAccelEnv2, MyLaneChangeAccelEnv3, MyLaneChangeAccelEnv4
+    MyLaneChangeAccelEnv2, MyLaneChangeAccelEnv3, MyLaneChangeAccelEnv4, MyLaneChangeAccelEnv5, MyLaneChangeAccelEnv6
 
 
 __all__ = [
@@ -34,6 +34,8 @@ __all__ = [
     'MyLaneChangeAccelEnv2',
     'MyLaneChangeAccelEnv3',
     'MyLaneChangeAccelEnv4',
+    'MyLaneChangeAccelEnv5',
+    'MyLaneChangeAccelEnv6',
     'MyLaneChangeAccelPOEnv',
     'TrafficLightGridTestEnv',
     'MergePOEnv',

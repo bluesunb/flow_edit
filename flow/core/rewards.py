@@ -88,8 +88,46 @@ def average_velocity(env, fail=False):
     return np.mean(vel)
 
 #bmil edit
-# def
+def punish_emergency_decel(env):
+    try:
+        max_decel = -env.env_params.additional_params['max_decel']
+        accel_list = [env.k.vehicle.get_accel(veh_id) for veh_id in env.k.vehicle.get_ids()
+                      if env.k.vehicle.get_accel(veh_id) is not None]
+        accel = np.array(accel_list)
+        accel_cliped = accel.clip(min=None, max=max_decel)
+        decel_gap_list = max_decel - accel_cliped
+    except TypeError:
+        print('max_decel', max_decel)
+        print('accel', accel_cliped)
+        # print('clip', accel_cliped)
+        raise TypeError
+    # if any (decel_gap_list):
+    #     with open('/home/bmil3/flow/examples/log/lane_change_accel_01.txt', 'a') as f:
+    #         f.write(f'decel_list : {decel_gap_list}\n')
+    if sum(decel_gap_list) != 0:
+        print(f'[RWD] {0.5 * sum(decel_gap_list)}, {sum(decel_gap_list)}')
+        print(f'[RWD] {decel_gap_list}')
+    return -sum(decel_gap_list)
 
+def punish_emergency_decel2(env):
+    try:
+        max_decel = -env.env_params.additional_params['max_decel']
+        accel_list = [env.k.vehicle.get_accel(veh_id) for veh_id in env.k.vehicle.get_ids()
+                      if env.k.vehicle.get_accel(veh_id) is not None]
+        accel = np.array(accel_list)
+        accel_cliped = accel.clip(min=None, max=max_decel)
+        decel_gap_list = max_decel - accel_cliped
+    except TypeError:
+        print('max_decel', max_decel)
+        print('accel', accel_cliped)
+        # print('clip', accel_cliped)
+        raise TypeError
+    if any(decel_gap_list):
+        print(f'[RWD] accel_cliped : {decel_gap_list}\n{decel_gap_list.astype(bool)}\n')
+    # if any (decel_gap_list):
+    #     with open('/home/bmil3/flow/examples/log/lane_change_accel_01.txt', 'a') as f:
+    #         f.write(f'decel_list : {decel_gap_list}\n')
+    return -sum(decel_gap_list.astype(bool))
 
 def rl_forward_progress(env, gain=0.1):
     """Rewared function used to reward the RL vehicles for travelling forward.
