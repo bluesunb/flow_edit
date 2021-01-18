@@ -10,6 +10,7 @@ def total_lc_reward(env):
         simple_lc_penalty(env),
         unnecessary_lc_penalty(env),
         punish_emergency_decel2(env),
+        # overtake_reward(env),
 
     ]
     return sum(reward_list)
@@ -100,13 +101,20 @@ def punish_emergency_decel2(env):
 
 # bmil edit
 def overtake_reward(env):
-    overtake_reward = env.initial_config.reward_params['dc2_penalty',0]
-    if overtake_reward == 0:
-        return 0
+    overtake_penalty = env.initial_config.reward_params.get('overtake_penalty', 0)
     reward = 0
+    if overtake_penalty == 0:
+        return 0
+
     for veh_id in env.k.vehicle.get_rl_ids():
-        if env.k.vehicle.get_leader(veh_id) != env.k.vehicle.get_prev_leader(veh_id):
-            reward += overtake_reward
+        lane_leaders = env.k.vehicle.get_lane_leaders(veh_id)
+        lane_followers = env.k.vehicle.get_lane_followers(veh_id)
+        if env.last_lane_leaders.get(veh_id) is not None and env.last_lane_leaders.get(veh_id) != lane_leaders:
+            for leader in env.last_lane_leaders[veh_id]:
+                if leader in lane_followers:
+                    reward -= overtake_penalty
+
+        env.last_lane_leaders[veh_id] = lane_leaders
 
     return reward
 

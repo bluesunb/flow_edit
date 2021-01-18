@@ -302,6 +302,7 @@ class MyLaneChangeAccelEnv(AccelEnv):
 
         super().__init__(env_params, sim_params, network, simulator)
 
+
     @property
     def action_space(self):
         """See class definition."""
@@ -399,6 +400,7 @@ class MyLaneChangeAccelEnv1(AccelEnv):
                     'Environment parameter "{}" not supplied'.format(p))
 
         super().__init__(env_params, sim_params, network, simulator)
+        self.last_lane_leaders = dict()
 
     @property
     def action_space(self):
@@ -425,14 +427,14 @@ class MyLaneChangeAccelEnv1(AccelEnv):
         # compute the system-level performance of vehicles from a velocity
         # perspective
         reward = rewards.desired_velocity(self, fail=kwargs["fail"])
-
         # punish excessive lane changes by reducing the reward by a set value
         # every time an rl car changes lanes (10% of max reward)
         for veh_id in self.k.vehicle.get_rl_ids():
             if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
-                lane_leaders = self.k.vehicle.get_lane_leaders(veh_id)
-                print(f'[LEADER] : {self.k.vehicle.get_lane(veh_id)}, {self.k.vehicle.get_leader(veh_id)}, {lane_leaders}')
                 reward -= 1
+        # if rewards.overtake_reward(self) != 0:
+        #     print('OVERTAKE!')
+        reward += rewards.overtake_reward(self)
 
         return reward
 
