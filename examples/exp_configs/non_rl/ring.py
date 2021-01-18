@@ -5,26 +5,36 @@ This example consists of 22 IDM cars on a ring creating shockwaves.
 
 from flow.controllers import IDMController, ContinuousRouter
 from flow.core.params import SumoParams, EnvParams, InitialConfig, NetParams
-from flow.core.params import VehicleParams
+from flow.core.params import VehicleParams, SumoCarFollowingParams
 from flow.envs.ring.accel import AccelEnv, ADDITIONAL_ENV_PARAMS
+from flow.envs.ring.lane_change_accel import MyLaneChangeAccelEnv
 from flow.networks.ring import RingNetwork, ADDITIONAL_NET_PARAMS
 
+HORIZON = 3000
 
 vehicles = VehicleParams()
 vehicles.add(
     veh_id='outline',
-    acceleration_controller=(IDMController, {}),
+    acceleration_controller=(IDMController, {'v0':2}),
     routing_controller=(ContinuousRouter, {}),
-    initial_speed=1,
-    num_vehicles=10
+    initial_speed=3,
+    num_vehicles=3,
+    car_following_params=SumoCarFollowingParams(
+        speed_mode='aggressive',
+        min_gap=0
+    )
 )
 
 vehicles.add(
     veh_id='inline',
-    acceleration_controller=(IDMController, {}),
+    acceleration_controller=(IDMController, {'v0':2}),
     routing_controller=(ContinuousRouter, {}),
-    initial_speed=1,
-    num_vehicles=5
+    initial_speed=3,
+    num_vehicles=3,
+    car_following_params=SumoCarFollowingParams(
+        speed_mode='aggressive',
+        min_gap=0
+    )
 )
 
 # vehicles.add(
@@ -42,7 +52,8 @@ flow_params = dict(
     exp_tag='ring',
 
     # name of the flow environment the experiment is running on
-    env_name=AccelEnv,
+    # env_name=AccelEnv,
+    env_name = MyLaneChangeAccelEnv,
 
     # name of the network class the experiment is running on
     network=RingNetwork,
@@ -58,8 +69,17 @@ flow_params = dict(
 
     # environment related parameters (see flow.core.params.EnvParams)
     env=EnvParams(
-        horizon=1500,
-        additional_params=ADDITIONAL_ENV_PARAMS,
+        horizon=HORIZON,
+        warmup_steps=750,
+        clip_actions=False,
+        additional_params={
+            "max_accel": 3,
+            "max_decel": 3,
+            "ring_length": [220, 270],
+            "lane_change_duration": 5,
+            "target_velocity": 10,
+            'sort_vehicles': False
+        },
     ),
 
     # network-related parameters (see flow.core.params.NetParams and the
@@ -70,6 +90,7 @@ flow_params = dict(
             "lanes": 2,
             "speed_limit": 30,
             "resolution": 40,
+
         }, ),
 
     # vehicles to be placed in the network at the start of a rollout (see
@@ -81,5 +102,9 @@ flow_params = dict(
     initial=InitialConfig(
         lanes_distribution=1,
         spacing='my2',
+        additional_params={
+            'inline_veh_nums' : sum(['inline' in vid for vid in vehicles.ids]),
+            'outline_veh_nums' : sum(['outline' in vid for vid in vehicles.ids]),
+        }
     ),
 )

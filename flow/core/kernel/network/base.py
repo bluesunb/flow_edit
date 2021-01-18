@@ -248,7 +248,7 @@ class BaseKernelNetwork(object):
             startpositions, startlanes = self.gen_my_start_pos(
                 initial_config, num_vehicles)
         elif initial_config.spacing == 'my2':
-            startpositions, startlanes = self.gen_my_start_pos(
+            startpositions, startlanes = self.gen_my_start_pos2(
                 initial_config, num_vehicles)
         else:
             raise FatalFlowError('"spacing" argument in initial_config does '
@@ -268,22 +268,40 @@ class BaseKernelNetwork(object):
         startpos, startlane = [], []
         inline_num = initial_config.additional_params['inline_veh_nums']
         outline_num = initial_config.additional_params['outline_veh_nums']
-        if num_vehicles != inline_num+outline_num:
-            raise ValueError('Vehicle nums are not match')
+        if num_vehicles != inline_num+outline_num + self.network.vehicles.num_rl_vehicles:
+            raise ValueError('car nums are not match')
 
-        edges = initial_config.edges_distribution.keys()
+        edges = ['bottom', 'right', 'top', 'left']
         edge_length = length//4
 
-        for o in range(outline_num):
-            pos = o*(VEHICLE_LENGTH+min_gap)
-            edge= edges[int(pos//edge_length)]
-            startpos.append((edge, pos % edge_length))
-            startlane.append(1)
-        for i in range(inline_num):
-            pos = i*(VEHICLE_LENGTH+min_gap)
-            edge= edges[int(pos//edge_length)]
+        if inline_num*(VEHICLE_LENGTH+min_gap) >= length or\
+                outline_num*(VEHICLE_LENGTH+min_gap) >= length:
+            raise ValueError('too many cars')
+
+        # inline_num+=1 # because of rl
+
+        inline_gap = length / inline_num
+
+        if inline_gap <= VEHICLE_LENGTH+2*min_gap:
+            raise ValueError('too many cars')
+
+        outline_gap = length / outline_num
+        outline_pos = [o*outline_gap for o in range(outline_num)]
+        inline_pos = [(o+1/2)*outline_gap for o in range(outline_num)]
+
+        for pos in outline_pos:
+            edge = edges[int(pos // edge_length)]
             startpos.append((edge, pos % edge_length))
             startlane.append(0)
+        for pos in inline_pos:
+            edge = edges[int(pos // edge_length)]
+            startpos.append((edge, pos % edge_length))
+            startlane.append(1)
+        if self.network.vehicles.num_rl_vehicles == 1:
+            rl_pos = (startpos[0][1]+startpos[1][1])/2
+            edge = edges[int(rl_pos // edge_length)]
+            startpos.append((edge, rl_pos % edge_length))
+            startlane.append(1)
 
         return startpos, startlane
 

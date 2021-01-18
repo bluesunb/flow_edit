@@ -32,29 +32,30 @@ vehicles.add(
     veh_id='outline',
     acceleration_controller=(IDMController, {'v0':5}),
     routing_controller=(ContinuousRouter, {}),
-    initial_speed=5,
-    num_vehicles=6,
+    initial_speed=3,
+    num_vehicles=5,
     car_following_params=SumoCarFollowingParams(
         speed_mode='aggressive',
+        min_gap=0
     )
 )
 
-# vehicles.add(
-#     veh_id='inline',
-#     acceleration_controller=(IDMController, {}),
-#     routing_controller=(ContinuousRouter, {}),
-#     initial_speed=1,
-#     num_vehicles=10
-# )
+vehicles.add(
+    veh_id='inline',
+    acceleration_controller=(IDMController, {'v0':5}),
+    routing_controller=(ContinuousRouter, {}),
+    initial_speed=3,
+    num_vehicles=3,
+    car_following_params=SumoCarFollowingParams(
+        speed_mode='aggressive',
+        min_gap=0
+    )
+)
 
 vehicles.add(
     veh_id="rl",
     acceleration_controller=(RLController, {}),
     routing_controller=(ContinuousRouter, {}),
-    lane_change_controller=(SimLaneChangeController, {}),
-    lane_change_params=SumoLaneChangeParams(
-        lane_change_mode=1621
-    ),
     initial_speed=5,
     num_vehicles=1)
 
@@ -111,11 +112,11 @@ flow_params = dict(
     # parameters specifying the positioning of vehicles upon initialization/
     # reset (see flow.core.params.InitialConfig)
     initial=InitialConfig(
-        spacing='my',
+        spacing='my2',
         lanes_distribution=1,
-        # additional_params={
-        #     'inline_veh_nums' : sum(['inline' in veh_id for veh_id in vehicles.ids]),
-        #     'outline_veh_nums' : sum(['outline' in veh_id for veh_id in vehicles.ids]),
-        # },
+        additional_params={
+            'inline_veh_nums': sum(['inline' in vid for vid in vehicles.ids]),
+            'outline_veh_nums': sum(['outline' in vid for vid in vehicles.ids]),
+        }
     ),
 )

@@ -20,6 +20,7 @@ CYAN = (0, 255, 255)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 OLIVE_GREEN = (51,153,102)
+OLIVE_GREEN_HL = (88, 182, 130)
 LIGHT_BLUE = (0, 153, 204)
 
 STEPS = 10
@@ -182,9 +183,17 @@ class TraCIVehicle(KernelVehicle):
 
             # reset all necessary values
             self.prev_last_lc = dict()
+            #bmil edit
+            # self.prev_last_ot = dict()
+
             for veh_id in self.__rl_ids:
                 self.__vehicles[veh_id]["last_lc"] = -float("inf")
                 self.prev_last_lc[veh_id] = -float("inf")
+
+                # #bmil edit
+                # self.__vehicles[veh_id]["last_ot"] = -float("inf")
+                # self.prev_last_ot[veh_id] = -float("inf")
+
             self._num_departed.clear()
             self._num_arrived.clear()
             self._departed_ids = 0
@@ -350,6 +359,9 @@ class TraCIVehicle(KernelVehicle):
 
         # set the "last_lc" parameter of the vehicle
         self.__vehicles[veh_id]["last_lc"] = -float("inf")
+
+        #bmil edit
+        self.__vehicles[veh_id]["last_ot"] = -float("inf")
 
         # specify the initial speed
         self.__vehicles[veh_id]["initial_speed"] = \
@@ -607,6 +619,12 @@ class TraCIVehicle(KernelVehicle):
             return [self.get_leader(vehID, error) for vehID in veh_id]
         return self.__vehicles.get(veh_id, {}).get("leader", error)
 
+    #bmil edit
+    def get_prev_leader(self, veh_id, error=""):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_leader(vehID, error) for vehID in veh_id]
+        return self.__vehicles.get(veh_id, {}).get("prev_leader", error)
+
     def get_follower(self, veh_id, error=""):
         """See parent class."""
         if isinstance(veh_id, (list, np.ndarray)):
@@ -621,16 +639,6 @@ class TraCIVehicle(KernelVehicle):
 
     def get_last_lc(self, veh_id, error=-1001):
         """See parent class."""
-        # if isinstance(veh_id, (list, np.ndarray)):
-        #     return [self.get_headway(vehID, error) for vehID in veh_id]
-        #
-        # if veh_id not in self.__rl_ids:
-        #     warnings.warn('Vehicle {} is not RL vehicle, "last_lc" term set to'
-        #                   ' {}.'.format(veh_id, error))
-        #     return error
-        # else:
-        #     return self.__vehicles.get(veh_id, {}).get("headway", error)
-
         #bmil edit
         if isinstance(veh_id, (list, np.ndarray)):
             return [self.get_last_lc(vehID, error) for vehID in veh_id]
@@ -1072,6 +1080,7 @@ class TraCIVehicle(KernelVehicle):
                     self.set_color(veh_id, OLIVE_GREEN)
                 elif 'outline' in veh_id:
                     self.set_color(veh_id, LIGHT_BLUE)
+                # self.set_color('inline_0', RED)
 
             except (FatalTraCIError, TraCIException) as e:
                 print('Error when updating human vehicle colors:', e)

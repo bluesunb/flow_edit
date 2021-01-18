@@ -25,6 +25,7 @@ import sumolib
 from flow.core.util import ensure_dir
 from flow.core.kernel import Kernel
 from flow.utils.exceptions import FatalFlowError
+from time import asctime
 
 
 class Env(gym.Env, metaclass=ABCMeta):
@@ -283,6 +284,11 @@ class Env(gym.Env, metaclass=ABCMeta):
             num_vehicles=len(self.initial_ids))
 
         # save the initial state. This is used in the _reset function
+
+        #bmil edit
+        with open('/home/bmil10/flow/examples/log/envs_log.txt', 'a') as f:
+            f.write(f'{asctime()} \n[IDS] : {self.initial_ids}\n')
+
         for i, veh_id in enumerate(self.initial_ids):
             type_id = self.k.vehicle.get_type(veh_id)
             pos = start_pos[i][1]

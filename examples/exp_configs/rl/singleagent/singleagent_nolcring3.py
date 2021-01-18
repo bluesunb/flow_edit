@@ -92,6 +92,11 @@ flow_params = dict(
     initial=InitialConfig(
         spacing='my',
         lanes_distribution=1,
-
+        reward_params={
+            'decel2_coeff': 2,
+            'max_lc_headway': 10,
+            'lc1_coeff': 3,
+            'lc2_coeff': 0.3,
+        },
     ),
 )

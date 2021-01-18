@@ -2,6 +2,113 @@
 
 import numpy as np
 
+#bmil edit
+
+def total_lc_reward(env):
+    reward_list = [
+        desired_velocity(env, fail=False, edge_list=None),
+        simple_lc_penalty(env),
+        unnecessary_lc_penalty(env),
+        punish_emergency_decel2(env),
+
+    ]
+    return sum(reward_list)
+
+def simple_lc_penalty(env):
+    simple_lc_penalty = env.initial_config.reward_params.get('simple_lc_penalty',0)
+    reward = 0
+    for veh_id in env.k.vehicle.get_rl_ids():
+        if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
+            reward -= simple_lc_penalty
+    return reward
+
+def unnecessary_lc_penalty(env):
+
+    # lc1 = 0 # lane change for overtaking
+    # lc2 = 0 # meaningless lane_change
+    #
+    # lc1_coeff, lc2_coeff = env.initial_config.reward_params.get('unnecessary_lc_penalty', (None, None))
+    # max_lc_headway = env.initial_config.reward_params.get('max_lc_headway') or 10
+    #
+    # # if option is not allocated, ignore this reward.
+    # if (lc1_coeff or lc2_coeff) is None:
+    #     return 0
+    #
+    # for veh_id in env.k.vehicle.get_rl_ids():
+    #     if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
+    #         if env.k.vehicle.get_headway(veh_id) > max_lc_headway:
+    #             lc2 -= lc2_coeff
+    #         else:
+    #             lc1 -= lc1_coeff
+    #
+    # reward = lc1 + lc2
+    # return reward
+    max_lc_headway = env.initial_config.reward_params.get('max_lc_headway', 10)
+    lc1 = 0 # lane change for overtaking
+    lc2 = 0 # meaningless lane_change
+
+    lc1_coeff, lc2_coeff = env.initial_config.reward_params.get('unnecessary_lc_penalty', (None, None))
+    # if option is not allocated, ignore this reward.
+    if (lc1_coeff or lc2_coeff) is None:
+        return 0
+
+    for veh_id in env.k.vehicle.get_rl_ids():
+        if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
+            i = not bool(env.k.vehicle.get_lane(veh_id))
+            if env.k.vehicle.get_lane_headways(veh_id)[int(i)] > max_lc_headway:
+                lc2 -= lc2_coeff
+            else:
+                lc1 -= lc1_coeff
+
+        reward = lc1 + lc2
+        return reward
+
+
+def punish_emergency_decel2(env):
+    """Reward function used to reward the RL vehicles cause the emergency stop of non RL vehicles
+
+    Parameters
+    ----------
+    env : flow.envs.Env
+        the environment variable, which contains information on the current
+        state of the system.
+    gain : float
+        specifies how much to reward the RL vehicles
+
+    Returns
+    -------
+    float
+        reward value
+    """
+    decel2_coeff = env.initial_config.reward_params.get('dc2_penalty', 0)
+    if decel2_coeff == 0:
+        return 0
+    max_decel = -env.env_params.additional_params['max_decel']
+    accel_list = [env.k.vehicle.get_accel(veh_id) for veh_id in env.k.vehicle.get_ids()
+                  if env.k.vehicle.get_accel(veh_id) is not None]
+    accel = np.array(accel_list)
+    accel_cliped = accel.clip(min=None, max=max_decel)
+    decel_gap_list = max_decel - accel_cliped
+
+    # if any(decel_gap_list):
+    #     print(f'[RWD] accel_cliped : {decel_gap_list}\n{decel_gap_list.astype(bool)}\n')
+    # if any (decel_gap_list):
+    #     with open('/home/bmil10/flow/examples/log/lane_change_accel_01.txt', 'a') as f:
+    #         f.write(f'decel_list : {decel_gap_list}\n')
+
+    return -sum(decel_gap_list.astype(bool)) * decel2_coeff
+
+# bmil edit
+def overtake_reward(env):
+    overtake_reward = env.initial_config.reward_params['dc2_penalty',0]
+    if overtake_reward == 0:
+        return 0
+    reward = 0
+    for veh_id in env.k.vehicle.get_rl_ids():
+        if env.k.vehicle.get_leader(veh_id) != env.k.vehicle.get_prev_leader(veh_id):
+            reward += overtake_reward
+
+    return reward
 
 def desired_velocity(env, fail=False, edge_list=None):
     r"""Encourage proximity to a desired velocity.
@@ -35,8 +142,13 @@ def desired_velocity(env, fail=False, edge_list=None):
     float
         reward value
     """
+    #bmil edit
+    only_rl = env.initial_config.reward_params.get('only_rl', False)
     if edge_list is None:
-        veh_ids = env.k.vehicle.get_ids()
+        veh_ids = env.k.vehicle.get_rl_ids() if only_rl else env.k.vehicle.get_ids()
+
+    # if edge_list is None:
+    #     veh_ids = env.k.vehicle.get_ids()
     else:
         veh_ids = env.k.vehicle.get_ids_by_edge(edge_list)
 
@@ -86,48 +198,6 @@ def average_velocity(env, fail=False):
         return 0.
 
     return np.mean(vel)
-
-#bmil edit
-def punish_emergency_decel(env):
-    try:
-        max_decel = -env.env_params.additional_params['max_decel']
-        accel_list = [env.k.vehicle.get_accel(veh_id) for veh_id in env.k.vehicle.get_ids()
-                      if env.k.vehicle.get_accel(veh_id) is not None]
-        accel = np.array(accel_list)
-        accel_cliped = accel.clip(min=None, max=max_decel)
-        decel_gap_list = max_decel - accel_cliped
-    except TypeError:
-        print('max_decel', max_decel)
-        print('accel', accel_cliped)
-        # print('clip', accel_cliped)
-        raise TypeError
-    # if any (decel_gap_list):
-    #     with open('/home/bmil3/flow/examples/log/lane_change_accel_01.txt', 'a') as f:
-    #         f.write(f'decel_list : {decel_gap_list}\n')
-    if sum(decel_gap_list) != 0:
-        print(f'[RWD] {0.5 * sum(decel_gap_list)}, {sum(decel_gap_list)}')
-        print(f'[RWD] {decel_gap_list}')
-    return -sum(decel_gap_list)
-
-def punish_emergency_decel2(env):
-    try:
-        max_decel = -env.env_params.additional_params['max_decel']
-        accel_list = [env.k.vehicle.get_accel(veh_id) for veh_id in env.k.vehicle.get_ids()
-                      if env.k.vehicle.get_accel(veh_id) is not None]
-        accel = np.array(accel_list)
-        accel_cliped = accel.clip(min=None, max=max_decel)
-        decel_gap_list = max_decel - accel_cliped
-    except TypeError:
-        print('max_decel', max_decel)
-        print('accel', accel_cliped)
-        # print('clip', accel_cliped)
-        raise TypeError
-    if any(decel_gap_list):
-        print(f'[RWD] accel_cliped : {decel_gap_list}\n{decel_gap_list.astype(bool)}\n')
-    # if any (decel_gap_list):
-    #     with open('/home/bmil3/flow/examples/log/lane_change_accel_01.txt', 'a') as f:
-    #         f.write(f'decel_list : {decel_gap_list}\n')
-    return -sum(decel_gap_list.astype(bool))
 
 def rl_forward_progress(env, gain=0.1):
     """Rewared function used to reward the RL vehicles for travelling forward.

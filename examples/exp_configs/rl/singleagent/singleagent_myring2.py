@@ -58,6 +58,8 @@ vehicles.add(
     initial_speed=5,
     num_vehicles=1)
 
+
+
 flow_params = dict(
     # name of the experiment
     exp_tag="no_lane_change_ring",
@@ -113,9 +115,11 @@ flow_params = dict(
     initial=InitialConfig(
         spacing='my',
         lanes_distribution=1,
-        # additional_params={
-        #     'inline_veh_nums' : sum(['inline' in veh_id for veh_id in vehicles.ids]),
-        #     'outline_veh_nums' : sum(['outline' in veh_id for veh_id in vehicles.ids]),
-        # },
+        reward_params= {
+            'decel2_coeff': 2,
+            'max_lc_headway': 10,
+            'lc1_coeff': 3,
+            'lc2_coeff': 0.3,
+        },
     ),
 )

@@ -486,6 +486,11 @@ class KernelVehicle(object, metaclass=ABCMeta):
         """
         pass
 
+    #bmil edit
+    @abstractmethod
+    def get_prev_leader(self, veh_id, error=""):
+        pass
+
     @abstractmethod
     def get_follower(self, veh_id, error=""):
         """Return the follower of the specified vehicle.
