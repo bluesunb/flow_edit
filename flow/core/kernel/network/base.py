@@ -243,11 +243,23 @@ class BaseKernelNetwork(object):
         elif initial_config.spacing == 'custom':
             startpositions, startlanes = self.gen_custom_start_pos(
                 initial_config, num_vehicles)
+
+        # bmil edit
+        elif initial_config.spacing == 'my':
+            startpositions, startlanes = self.gen_my_start_pos(
+                initial_config, num_vehicles)
+
         else:
             raise FatalFlowError('"spacing" argument in initial_config does '
                                  'not contain a valid option')
 
         return startpositions, startlanes
+
+    def gen_my_start_pos(self, initial_config, num_vehicles):
+        startpos, startlanes = self.gen_even_start_pos(initial_config, num_vehicles)
+        for i in range(0, num_vehicles, 2):
+            startlanes[i] = 1
+        return startpos, startlanes
 
     def gen_even_start_pos(self, initial_config, num_vehicles):
         """Generate uniformly spaced starting positions.

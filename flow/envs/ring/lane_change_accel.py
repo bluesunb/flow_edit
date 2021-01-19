@@ -140,6 +140,17 @@ class LaneChangeAccelEnv(AccelEnv):
             if veh_id in self.k.vehicle.get_rl_ids()
         ]
 
+        # bmil edit
+        for i in range(len(direction)):
+            d = direction[i]
+            if d >= -1 and d < -0.2:
+                direction[i] = -1
+            elif 0.2 < d and d <= 1:
+                direction[i] = 1
+            else:
+                direction[i] = 0
+
+
         # represents vehicles that are allowed to change lanes
         non_lane_changing_veh = \
             [self.time_counter <=
