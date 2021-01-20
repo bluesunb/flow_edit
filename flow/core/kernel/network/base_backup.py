@@ -243,70 +243,11 @@ class BaseKernelNetwork(object):
         elif initial_config.spacing == 'custom':
             startpositions, startlanes = self.gen_custom_start_pos(
                 initial_config, num_vehicles)
-
-        # bmil edit
-        elif initial_config.spacing == 'my':
-            startpositions, startlanes = self.gen_my_start_pos(
-                initial_config, num_vehicles)
-        elif initial_config.spacing == 'my2':
-            startpositions, startlanes = self.gen_my_start_pos2(
-                initial_config, num_vehicles)
-
         else:
             raise FatalFlowError('"spacing" argument in initial_config does '
                                  'not contain a valid option')
 
         return startpositions, startlanes
-
-    def gen_my_start_pos(self, initial_config, num_vehicles):
-        startpos, startlanes = self.gen_even_start_pos(initial_config, num_vehicles)
-        for i in range(0, num_vehicles, 2):
-            startlanes[i] = 1
-        return startpos, startlanes
-
-    #bmil edit
-    def gen_my_start_pos2(self, initial_config, num_vehicles):
-        length = self.network.net_params.additional_params['length']
-        min_gap = initial_config.min_gap
-        startpos, startlane = [], []
-        inline_num = initial_config.additional_params['inline_veh_nums']
-        outline_num = initial_config.additional_params['outline_veh_nums']
-        if num_vehicles != inline_num+outline_num + self.network.vehicles.num_rl_vehicles:
-            raise ValueError('car nums are not match')
-
-        edges = ['bottom', 'right', 'top', 'left']
-        edge_length = length//4
-
-        if inline_num*(VEHICLE_LENGTH+min_gap) >= length or\
-                outline_num*(VEHICLE_LENGTH+min_gap) >= length:
-            raise ValueError('too many cars')
-
-        # inline_num+=1 # because of rl
-
-        inline_gap = length / inline_num
-
-        if inline_gap <= VEHICLE_LENGTH+2*min_gap:
-            raise ValueError('too many cars')
-
-        outline_gap = length / outline_num
-        outline_pos = [o*outline_gap for o in range(outline_num)]
-        inline_pos = [(o+1/2)*outline_gap for o in range(outline_num)]
-
-        for pos in outline_pos:
-            edge = edges[int(pos // edge_length)]
-            startpos.append((edge, pos % edge_length))
-            startlane.append(0)
-        for pos in inline_pos:
-            edge = edges[int(pos // edge_length)]
-            startpos.append((edge, pos % edge_length))
-            startlane.append(1)
-        if self.network.vehicles.num_rl_vehicles == 1:
-            rl_pos = (startpos[0][1]+startpos[1][1])/2
-            edge = edges[int(rl_pos // edge_length)]
-            startpos.append((edge, rl_pos % edge_length))
-            startlane.append(1)
-
-        return startpos, startlane
 
     def gen_even_start_pos(self, initial_config, num_vehicles):
         """Generate uniformly spaced starting positions.

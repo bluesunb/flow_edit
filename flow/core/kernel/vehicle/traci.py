@@ -619,14 +619,14 @@ class TraCIVehicle(KernelVehicle):
     def get_last_lc(self, veh_id, error=-1001):
         """See parent class."""
         if isinstance(veh_id, (list, np.ndarray)):
-            return [self.get_headway(vehID, error) for vehID in veh_id]
+            return [self.get_last_lc(vehID, error) for vehID in veh_id]
 
         if veh_id not in self.__rl_ids:
             warnings.warn('Vehicle {} is not RL vehicle, "last_lc" term set to'
                           ' {}.'.format(veh_id, error))
             return error
         else:
-            return self.__vehicles.get(veh_id, {}).get("headway", error)
+            return self.__vehicles.get(veh_id, {}).get("last_lc", error)
 
     def get_acc_controller(self, veh_id, error=None):
         """See parent class."""
@@ -1052,6 +1052,15 @@ class TraCIVehicle(KernelVehicle):
                 if self._force_color_update or 'color' not in \
                         self.type_parameters[self.get_type(veh_id)]:
                     self.set_color(veh_id=veh_id, color=color)
+
+                # #bmil edit
+                # if 'inline' in veh_id:
+                #     self.set_color(veh_id, OLIVE_GREEN)
+                # elif 'outline' in veh_id:
+                #     self.set_color(veh_id, LIGHT_BLUE)
+                # self.set_color('inline_0', RED)
+                # end edit
+
             except (FatalTraCIError, TraCIException) as e:
                 print('Error when updating human vehicle colors:', e)
 

@@ -322,9 +322,6 @@ class Env(gym.Env, metaclass=ABCMeta):
         info : dict
             contains other diagnostic information from the previous action
         """
-        # bmil edit
-        # print(f'[ACTION] : {rl_actions}')
-
         for _ in range(self.env_params.sims_per_step):
             self.time_counter += 1
             self.step_counter += 1
@@ -498,14 +495,6 @@ class Env(gym.Env, metaclass=ABCMeta):
         for veh_id in self.initial_ids:
             type_id, edge, lane_index, pos, speed = \
                 self.initial_state[veh_id]
-
-            #bmil edit
-            veh_id = str(veh_id)
-            type_id = str(type_id)
-            edge = str(edge)
-            lane_index = str(lane_index)
-            pos = float(pos)
-            speed = float(speed)
 
             try:
                 self.k.vehicle.add(

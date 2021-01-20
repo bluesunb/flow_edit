@@ -3,98 +3,9 @@
 import numpy as np
 
 
-#bmil edit
-def total_lc_reward(env):
-    reward_list = [
-        desired_velocity(env, fail=False, edge_list=None),
-        simple_lc_penalty(env),
-        unnecessary_lc_penalty(env),
-        punish_emergency_decel2(env),
-        # overtake_reward(env),
-
-    ]
-    return sum(reward_list)
-
-def simple_lc_penalty(env):
-    simple_lc_penalty = env.initial_config.reward_params.get('simple_lc_penalty',0)
-    reward = 0
-    for veh_id in env.k.vehicle.get_rl_ids():
-        if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
-            reward -= simple_lc_penalty
-    return reward
-
-def unnecessary_lc_penalty(env):
-
-    max_lc_headway = env.initial_config.reward_params.get('max_lc_headway', 10)
-    lc1 = 0 # lane change for overtaking
-    lc2 = 0 # meaningless lane_change
-
-    lc1_coeff, lc2_coeff = env.initial_config.reward_params.get('unnecessary_lc_penalty', (None, None))
-    # if option is not allocated, ignore this reward.
-    if (lc1_coeff or lc2_coeff) is None:
-        return 0
-
-    for veh_id in env.k.vehicle.get_rl_ids():
-        if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
-            i = not bool(env.k.vehicle.get_lane(veh_id))
-            if env.k.vehicle.get_lane_headways(veh_id)[int(i)] > max_lc_headway:
-                lc2 -= lc2_coeff
-            else:
-                lc1 -= lc1_coeff
-
-        reward = lc1 + lc2
-        return reward
-
-
-def punish_emergency_decel2(env):
-    """Reward function used to reward the RL vehicles cause the emergency stop of non RL vehicles
-
-    Parameters
-    ----------
-    env : flow.envs.Env
-        the environment variable, which contains information on the current
-        state of the system.
-    gain : float
-        specifies how much to reward the RL vehicles
-
-    Returns
-    -------
-    float
-        reward value
-    """
-    decel2_coeff = env.initial_config.reward_params.get('dc2_penalty', 0)
-    if decel2_coeff == 0:
-        return 0
-    max_decel = -env.env_params.additional_params['max_decel']
-    accel_list = [env.k.vehicle.get_accel(veh_id) for veh_id in env.k.vehicle.get_ids()
-                  if env.k.vehicle.get_accel(veh_id) is not None]
-    accel = np.array(accel_list)
-    accel_cliped = accel.clip(min=None, max=max_decel)
-    decel_gap_list = max_decel - accel_cliped
-
-    return -sum(decel_gap_list.astype(bool)) * decel2_coeff
-
-# bmil edit
-def overtake_reward(env):
-    overtake_penalty = env.initial_config.reward_params.get('overtake_penalty', 0)
-    reward = 0
-    if overtake_penalty == 0:
-        return 0
-
-    for veh_id in env.k.vehicle.get_rl_ids():
-        lane_leaders = env.k.vehicle.get_lane_leaders(veh_id)
-        lane_followers = env.k.vehicle.get_lane_followers(veh_id)
-        if env.last_lane_leaders.get(veh_id) is not None and env.last_lane_leaders.get(veh_id) != lane_leaders:
-            for leader in env.last_lane_leaders[veh_id]:
-                if leader in lane_followers:
-                    reward -= overtake_penalty
-
-        env.last_lane_leaders[veh_id] = lane_leaders
-
-    return reward
-
 def desired_velocity(env, fail=False, edge_list=None):
     r"""Encourage proximity to a desired velocity.
+
     This function measures the deviation of a system of vehicles from a
     user-specified desired velocity peaking when all vehicles in the ring
     are set to this desired velocity. Moreover, in order to ensure that the
@@ -107,6 +18,7 @@ def desired_velocity(env, fail=False, edge_list=None):
     velocity. Additionally, since the velocity of vehicles are
     unbounded above, the reward is bounded below by zero,
     to ensure nonnegativity.
+
     Parameters
     ----------
     env : flow.envs.Env
@@ -117,16 +29,14 @@ def desired_velocity(env, fail=False, edge_list=None):
     edge_list : list  of str, optional
         list of edges the reward is computed over. If no edge_list is defined,
         the reward is computed over all edges
+
     Returns
     -------
     float
         reward value
     """
-    #bmil edit
-    # only_rl = env.initial_config.reward_params.get('only_rl', False)
-    only_rl = False
     if edge_list is None:
-        veh_ids = env.k.vehicle.get_rl_ids() if only_rl else env.k.vehicle.get_ids()
+        veh_ids = env.k.vehicle.get_ids()
     else:
         veh_ids = env.k.vehicle.get_ids_by_edge(edge_list)
 
@@ -147,6 +57,7 @@ def desired_velocity(env, fail=False, edge_list=None):
     eps = np.finfo(np.float32).eps
 
     return max(max_cost - cost, 0) / (max_cost + eps)
+
 
 def average_velocity(env, fail=False):
     """Encourage proximity to an average velocity.

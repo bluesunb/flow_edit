@@ -140,17 +140,6 @@ class LaneChangeAccelEnv(AccelEnv):
             if veh_id in self.k.vehicle.get_rl_ids()
         ]
 
-        # bmil edit
-        for i in range(len(direction)):
-            d = direction[i]
-            if d >= -1 and d < -0.2:
-                direction[i] = -1
-            elif 0.2 < d and d <= 1:
-                direction[i] = 1
-            else:
-                direction[i] = 0
-
-
         # represents vehicles that are allowed to change lanes
         non_lane_changing_veh = \
             [self.time_counter <=
@@ -161,14 +150,6 @@ class LaneChangeAccelEnv(AccelEnv):
         direction[non_lane_changing_veh] = \
             np.array([0] * sum(non_lane_changing_veh))
 
-        # raise ArithmeticError('MYERROR!!!!')
-        #bmil edit
-        # print(f'[LCLCLC] : {[acceleration[0], direction[0]]}')
-
-        # if self.k.vehicle.get_timestep(sorted_rl_ids[0]) == 131900:
-        #     d = self.k.vehicle.get_lane(sorted_rl_ids[0])
-        #     direction[0]=1 if d==0 else -1
-        #     print(direction)
         self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
         self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)
 
