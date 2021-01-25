@@ -19,6 +19,10 @@ WHITE = (255, 255, 255)
 CYAN = (0, 255, 255)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
+OLIVE_GREEN = (51,153,102)
+OLIVE_GREEN_HL = (88, 182, 130)
+LIGHT_BLUE = (0, 153, 204)
+
 STEPS = 10
 rdelta = 255 / STEPS
 # smoothly go from red to green as the speed increases
@@ -1054,6 +1058,8 @@ class TraCIVehicle(KernelVehicle):
                     self.set_color(veh_id=veh_id, color=color)
 
                 # #bmil edit
+                if 'rl' in veh_id:
+                    self.set_color(veh_id, RED)
                 # if 'inline' in veh_id:
                 #     self.set_color(veh_id, OLIVE_GREEN)
                 # elif 'outline' in veh_id:

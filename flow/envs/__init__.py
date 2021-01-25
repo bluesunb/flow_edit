@@ -6,7 +6,7 @@ from flow.envs.bottleneck import BottleneckAccelEnv, BottleneckEnv, \
 from flow.envs.traffic_light_grid import TrafficLightGridEnv, \
     TrafficLightGridPOEnv, TrafficLightGridTestEnv, TrafficLightGridBenchmarkEnv
 from flow.envs.ring.lane_change_accel import LaneChangeAccelEnv, \
-    LaneChangeAccelPOEnv
+    LaneChangeAccelPOEnv, MyLaneChangeAccelEnv
 from flow.envs.ring.accel import AccelEnv
 from flow.envs.ring.wave_attenuation import WaveAttenuationEnv, \
     WaveAttenuationPOEnv
@@ -25,6 +25,7 @@ __all__ = [
     'AccelEnv',
     'LaneChangeAccelEnv',
     'LaneChangeAccelPOEnv',
+    'MyLaneChangeAccelEnv',
     'TrafficLightGridTestEnv',
     'MergePOEnv',
     'BottleneckEnv',
@@ -43,3 +44,4 @@ __all__ = [
     'PO_TrafficLightGridEnv',
     'GreenWaveTestEnv',
 ]
+

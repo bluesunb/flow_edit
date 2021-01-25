@@ -10,10 +10,10 @@ def total_lc_reward(env):
         simple_lc_penalty(env),
         unnecessary_lc_penalty(env),
         punish_emergency_decel2(env),
-        # overtake_reward(env),
+        overtake_reward(env),
 
     ]
-    return sum(reward_list)
+    return np.array(reward_list)
 
 def simple_lc_penalty(env):
     simple_lc_penalty = env.initial_config.reward_params.get('simple_lc_penalty',0)
@@ -29,9 +29,9 @@ def unnecessary_lc_penalty(env):
     lc1 = 0 # lane change for overtaking
     lc2 = 0 # meaningless lane_change
 
-    lc1_coeff, lc2_coeff = env.initial_config.reward_params.get('unnecessary_lc_penalty', (None, None))
+    lc1_coeff, lc2_coeff = env.initial_config.reward_params.get('unnecessary_lc_penalty', (0,0))
     # if option is not allocated, ignore this reward.
-    if (lc1_coeff or lc2_coeff) is None:
+    if lc1_coeff and lc2_coeff == 0:
         return 0
 
     for veh_id in env.k.vehicle.get_rl_ids():
@@ -42,8 +42,8 @@ def unnecessary_lc_penalty(env):
             else:
                 lc1 -= lc1_coeff
 
-        reward = lc1 + lc2
-        return reward
+    reward = lc1 + lc2
+    return reward
 
 
 def punish_emergency_decel2(env):
@@ -54,8 +54,6 @@ def punish_emergency_decel2(env):
     env : flow.envs.Env
         the environment variable, which contains information on the current
         state of the system.
-    gain : float
-        specifies how much to reward the RL vehicles
 
     Returns
     -------
@@ -67,18 +65,19 @@ def punish_emergency_decel2(env):
         return 0
     max_decel = -env.env_params.additional_params['max_decel']
     accel_list = [env.k.vehicle.get_accel(veh_id) for veh_id in env.k.vehicle.get_ids()
-                  if env.k.vehicle.get_accel(veh_id) is not None]
+                  if env.k.vehicle.get_accel(veh_id) is not None and env.k.vehicle.get_accel(veh_id) < max_decel]
     accel = np.array(accel_list)
-    accel_cliped = accel.clip(min=None, max=max_decel)
-    decel_gap_list = max_decel - accel_cliped
+    decel_gap_list = max_decel - accel
+    d_accel = decel_gap_list/abs(2*max_decel)
+    accel_cliped = d_accel.clip(min=None, max=1)
+    return -decel2_coeff * sum(accel_cliped)
 
-    return -sum(decel_gap_list.astype(bool)) * decel2_coeff
 
 # bmil edit
 def overtake_reward(env):
-    overtake_penalty = env.initial_config.reward_params.get('overtake_penalty', 0)
+    overtake_reward = env.initial_config.reward_params.get('overtake_reward', 0)
     reward = 0
-    if overtake_penalty == 0:
+    if overtake_reward == 0:
         return 0
 
     for veh_id in env.k.vehicle.get_rl_ids():
@@ -87,7 +86,7 @@ def overtake_reward(env):
         if env.last_lane_leaders.get(veh_id) is not None and env.last_lane_leaders.get(veh_id) != lane_leaders:
             for leader in env.last_lane_leaders[veh_id]:
                 if leader in lane_followers:
-                    reward -= overtake_penalty
+                    reward += overtake_reward
 
         env.last_lane_leaders[veh_id] = lane_leaders
 

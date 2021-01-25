@@ -76,6 +76,9 @@ class LaneChangeAccelEnv(AccelEnv):
                     'Environment parameter "{}" not supplied'.format(p))
 
         super().__init__(env_params, sim_params, network, simulator)
+        # bmil edit
+        self.last_lane_leaders = dict()
+        self.accumulated_reward = None
 
     @property
     def action_space(self):
@@ -94,22 +97,23 @@ class LaneChangeAccelEnv(AccelEnv):
         return Box(
             low=0,
             high=1,
-            shape=(3 * self.initial_vehicles.num_vehicles, ),
+            shape=(3 * self.initial_vehicles.num_vehicles,),
             dtype=np.float32)
 
     def compute_reward(self, rl_actions, **kwargs):
-        """See class definition."""
-        # compute the system-level performance of vehicles from a velocity
-        # perspective
-        reward = rewards.desired_velocity(self, fail=kwargs["fail"])
-
-        # punish excessive lane changes by reducing the reward by a set value
-        # every time an rl car changes lanes (10% of max reward)
-        for veh_id in self.k.vehicle.get_rl_ids():
-            if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
-                reward -= 0.1
-
-        return reward
+        # """See class definition."""
+        # # compute the system-level performance of vehicles from a velocity
+        # # perspective
+        # reward = rewards.desired_velocity(self, fail=kwargs["fail"])
+        #
+        # # punish excessive lane changes by reducing the reward by a set value
+        # # every time an rl car changes lanes (10% of max reward)
+        # for veh_id in self.k.vehicle.get_rl_ids():
+        #     if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
+        #         reward -= 0.1
+        #
+        # return reward
+        pass
 
     def get_state(self):
         """See class definition."""
@@ -150,7 +154,6 @@ class LaneChangeAccelEnv(AccelEnv):
             else:
                 direction[i] = 0
 
-
         # represents vehicles that are allowed to change lanes
         non_lane_changing_veh = \
             [self.time_counter <=
@@ -161,14 +164,6 @@ class LaneChangeAccelEnv(AccelEnv):
         direction[non_lane_changing_veh] = \
             np.array([0] * sum(non_lane_changing_veh))
 
-        # raise ArithmeticError('MYERROR!!!!')
-        #bmil edit
-        # print(f'[LCLCLC] : {[acceleration[0], direction[0]]}')
-
-        # if self.k.vehicle.get_timestep(sorted_rl_ids[0]) == 131900:
-        #     d = self.k.vehicle.get_lane(sorted_rl_ids[0])
-        #     direction[0]=1 if d==0 else -1
-        #     print(direction)
         self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
         self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)
 
@@ -228,7 +223,7 @@ class LaneChangeAccelPOEnv(LaneChangeAccelEnv):
             low=0,
             high=1,
             shape=(4 * self.initial_vehicles.num_rl_vehicles *
-                   self.num_lanes + self.initial_vehicles.num_rl_vehicles, ),
+                   self.num_lanes + self.initial_vehicles.num_rl_vehicles,),
             dtype=np.float32)
 
     def get_state(self):
@@ -261,28 +256,32 @@ class LaneChangeAccelPOEnv(LaneChangeAccelEnv):
             for j, lane_leader in enumerate(lane_leaders):
                 if lane_leader != '':
                     lane_headways[j] /= max_length
-                    vel_in_front[j] = self.k.vehicle.get_speed(lane_leader) \
-                        / max_speed
+                    vel_in_front[j] = self.k.vehicle.get_speed(lane_leader) / max_speed
                     self.visible.extend([lane_leader])
             for j, lane_follower in enumerate(lane_followers):
                 if lane_follower != '':
                     lane_headways[j] /= max_length
-                    vel_behind[j] = self.k.vehicle.get_speed(lane_follower) \
-                        / max_speed
+                    vel_behind[j] = self.k.vehicle.get_speed(lane_follower) / max_speed
                     self.visible.extend([lane_follower])
 
             # add the headways, tailways, and speed for all lane leaders
             # and followers
-            obs[4*self.num_lanes*i:4*self.num_lanes*(i+1)] = \
+            obs[4 * self.num_lanes * i:4 * self.num_lanes * (i + 1)] = \
                 np.concatenate((headway, tailway, vel_in_front, vel_behind))
 
             # add the speed for the ego rl vehicle
             obs.append(self.k.vehicle.get_speed(rl_id))
 
-            return np.array(obs)
+        return np.array(obs)
 
     def additional_command(self):
         """Define which vehicles are observed for visualization purposes."""
         # specify observed vehicles
         for veh_id in self.visible:
             self.k.vehicle.set_observed(veh_id)
+
+
+class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
+    def compute_reward(self, rl_actions, **kwargs):
+        reward = rewards.total_lc_reward(self)
+        return sum(reward)
