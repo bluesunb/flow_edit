@@ -47,7 +47,7 @@ vehicles.add(
     acceleration_controller=(IDMController, {}),
     routing_controller=(ContinuousRouter, {}),
     lane_change_params=SumoLaneChangeParams(
-        lane_change_mode=11108,
+        lane_change_mode=528,
         lc_speed_gain=10,
     ),
     initial_speed=5,
@@ -72,7 +72,7 @@ flow_params = dict(
         additional_params={
             "max_accel": 3,
             "max_decel": 3,
-            "ring_length": [220, 270],
+            "ring_length": [700,770],
             "lane_change_duration": 5,
             "target_velocity": 10,
             'sort_vehicles': False
@@ -89,12 +89,12 @@ flow_params = dict(
 
     veh=vehicles,
     initial=InitialConfig(
-        spacing='my',
-        lanes_distribution=1,
-        additional_params={
-            'inline_veh_nums': sum(['inline' in vid for vid in vehicles.ids]),
-            'outline_veh_nums': sum(['outline' in vid for vid in vehicles.ids]),
-        },
+        spacing='lc_random',
+        # lanes_distribution=1,
+        # additional_params={
+        #     'inline_veh_nums': sum(['inline' in vid for vid in vehicles.ids]),
+        #     'outline_veh_nums': sum(['outline' in vid for vid in vehicles.ids]),
+        # },
         reward_params={
             'only_rl': True,
             'simple_lc_penalty': 0.1,

@@ -5,8 +5,6 @@ from flow.core import rewards
 
 from gym.spaces.box import Box
 import numpy as np
-from collections import defaultdict
-import matplotlib.pyplot as plt
 
 ADDITIONAL_ENV_PARAMS = {
     # maximum acceleration for autonomous vehicles, in m/s^2
@@ -83,9 +81,6 @@ class LaneChangeAccelEnv(AccelEnv):
         self.last_states = None
         self.accumulated_reward = None
 
-        self.timesteps = []
-        self.speeds = defaultdict(list)
-
     @property
     def action_space(self):
         """See class definition."""
@@ -129,32 +124,7 @@ class LaneChangeAccelEnv(AccelEnv):
         #     f.write(f'reward : {sum(reward)}={reward}\n')
         # self.last_states = state
         reward = rewards.total_lc_reward(self)
-        ids = self.k.vehicle.get_ids()
-        self.timesteps.append(self.k.vehicle.get_timestep(ids[-1])/10000)
-        for veh_id in ids:
-            self.speeds[veh_id].append(self.k.vehicle.get_speed(veh_id) or 0)
-        if self.k.vehicle.get_timestep(self.k.vehicle.get_ids()[-1]) == 375200:
-            self.draw_plot()
         return sum(reward)
-
-    def draw_plot(self):
-        veh = list(self.speeds.keys())
-        plt.subplot(2, 1, 1)
-        for v in veh[:-1]:
-            plt.plot(self.timesteps, self.speeds[v])
-        plt.xlabel('timestep(s)')
-        plt.ylabel('speed(m/s)')
-        plt.legend(veh[:-1])
-        plt.grid(True)
-        # plt.show()
-
-        plt.subplot(2, 1, 2)
-        plt.plot(self.timesteps, self.speeds[veh[-1]])
-        plt.xlabel('timestep(s)')
-        plt.ylabel('speed(m/s)')
-        plt.legend(veh[-1:])
-        plt.grid(True)
-        plt.show()
 
     def get_state(self):
         """See class definition."""
@@ -188,9 +158,9 @@ class LaneChangeAccelEnv(AccelEnv):
         # bmil edit
         for i in range(len(direction)):
             d = direction[i]
-            if d >= -1 and d < -0.3333:
+            if d >= -1 and d < -0.3:
                 direction[i] = -1
-            elif 0.3333 < d and d <= 1:
+            elif 0.3 < d and d <= 1:
                 direction[i] = 1
             else:
                 direction[i] = 0
@@ -332,22 +302,8 @@ class LaneChangeAccelPOEnv(LaneChangeAccelEnv):
             self.k.vehicle.set_observed(veh_id)
 
 class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
-    def compute_reward(self, rl_actions, **kwargs):
-        reward = rewards.total_lc_reward(self)
-
-        # bmil edit
-        timestep = self.k.vehicle.get_timestep(self.k.vehicle.get_rl_ids()[0])
-        # msg = ['sim_lc', 'unnec_lc', 'dc2', 'ot', 'uns']
-        # if any(reward[1:]):
-        #     print(f'[{msg[np.where(reward[1:]<0)[0][0]]}] : {reward.round(3)}')
-        if self.accumulated_reward is None:
-            self.accumulated_reward = reward
-        else:
-            self.accumulated_reward += reward
-        if timestep%375200==0:
-            reward_rate = list((self.accumulated_reward/self.accumulated_reward[0]).round(3))
-            accu_reward = list(self.accumulated_reward.round(3))
-            print(f'[r]\t{reward_rate}\t{accu_reward}\n      INIT == {self.initial_config.reward_params}')
-            print(f'LC\t{-self.accumulated_reward[1]/self.initial_config.reward_params["simple_lc_penalty"]}\n'
-                  f'DC\t{-self.accumulated_reward[3]/(self.initial_config.reward_params.get("dc2_penalty") or self.initial_config.reward_params.get("dc3_penalty"))}')
-        return sum(reward)
+    pass
+    # def compute_reward(self, rl_actions, **kwargs):
+    #     reward = rewards.total_lc_reward(self)
+    #     self.k.vehicle.
+    #     return sum(reward)

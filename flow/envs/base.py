@@ -333,33 +333,26 @@ class Env(gym.Env, metaclass=ABCMeta):
             if len(self.k.vehicle.get_controlled_ids()) > 0:
                 accel = []
                 for veh_id in self.k.vehicle.get_controlled_ids():
-                    action = self.k.vehicle.get_acc_controller(
-                        veh_id).get_action(self)
+                    action = self.k.vehicle.get_acc_controller(veh_id).get_action(self)
                     accel.append(action)
-                self.k.vehicle.apply_acceleration(
-                    self.k.vehicle.get_controlled_ids(), accel)
+                self.k.vehicle.apply_acceleration(self.k.vehicle.get_controlled_ids(), accel)
 
             # perform lane change actions for controlled human-driven vehicles
             if len(self.k.vehicle.get_controlled_lc_ids()) > 0:
                 direction = []
                 for veh_id in self.k.vehicle.get_controlled_lc_ids():
-                    target_lane = self.k.vehicle.get_lane_changing_controller(
-                        veh_id).get_action(self)
+                    target_lane = self.k.vehicle.get_lane_changing_controller(veh_id).get_action(self)
                     direction.append(target_lane)
-                self.k.vehicle.apply_lane_change(
-                    self.k.vehicle.get_controlled_lc_ids(),
-                    direction=direction)
+                self.k.vehicle.apply_lane_change(self.k.vehicle.get_controlled_lc_ids(),direction=direction)
 
             # perform (optionally) routing actions for all vehicles in the
             # network, including RL and SUMO-controlled vehicles
             routing_ids = []
             routing_actions = []
             for veh_id in self.k.vehicle.get_ids():
-                if self.k.vehicle.get_routing_controller(veh_id) \
-                        is not None:
+                if self.k.vehicle.get_routing_controller(veh_id) is not None:
                     routing_ids.append(veh_id)
-                    route_contr = self.k.vehicle.get_routing_controller(
-                        veh_id)
+                    route_contr = self.k.vehicle.get_routing_controller(veh_id)
                     routing_actions.append(route_contr.choose_route(self))
 
             self.k.vehicle.choose_routes(routing_ids, routing_actions)
@@ -520,7 +513,10 @@ class Env(gym.Env, metaclass=ABCMeta):
                 # now and then reintroduce it
                 self.k.vehicle.remove(veh_id)
                 if self.simulator == 'traci':
+                    # bmil edit
+                    # kernel_api 대신에 kernel 쓰는 걸로 해결이 되려나?
                     self.k.kernel_api.vehicle.remove(veh_id)  # FIXME: hack
+                    # self.k.vehicle.remove(veh_id)
                 self.k.vehicle.add(
                     veh_id=veh_id,
                     type_id=type_id,

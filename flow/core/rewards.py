@@ -3,7 +3,7 @@
 import numpy as np
 
 
-#bmil edit
+# bmil edit
 def total_lc_reward(env):
     reward_list = [
         desired_velocity(env, fail=False, edge_list=None),
@@ -11,27 +11,29 @@ def total_lc_reward(env):
         unnecessary_lc_penalty(env),
         punish_emergency_decel2(env),
         overtake_reward(env),
+        unsafe_distance_penalty(env),
 
     ]
     return np.array(reward_list)
 
+
 def simple_lc_penalty(env):
-    simple_lc_penalty = env.initial_config.reward_params.get('simple_lc_penalty',0)
+    sim_lc_penalty = env.initial_config.reward_params.get('simple_lc_penalty', 0)
     reward = 0
     for veh_id in env.k.vehicle.get_rl_ids():
         if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
-            reward -= simple_lc_penalty
+            reward -= sim_lc_penalty
     return reward
 
+
 def unnecessary_lc_penalty(env):
-
     max_lc_headway = env.initial_config.reward_params.get('max_lc_headway', 10)
-    lc1 = 0 # lane change for overtaking
-    lc2 = 0 # meaningless lane_change
+    lc1 = 0  # lane change for overtaking
+    lc2 = 0  # meaningless lane_change
 
-    lc1_coeff, lc2_coeff = env.initial_config.reward_params.get('unnecessary_lc_penalty', (0,0))
+    lc1_coeff, lc2_coeff = env.initial_config.reward_params.get('unnecessary_lc_penalty', (0, 0))
     # if option is not allocated, ignore this reward.
-    if lc1_coeff and lc2_coeff == 0:
+    if (lc1_coeff, lc2_coeff) == (0,0):
         return 0
 
     for veh_id in env.k.vehicle.get_rl_ids():
@@ -60,17 +62,80 @@ def punish_emergency_decel2(env):
     float
         reward value
     """
+    # decel2_coeff = env.initial_config.reward_params.get('dc2_penalty', 0)
+    # decel3_coeff = env.initial_config.reward_params.get('dc3_penalty', 0)
+    # if decel2_coeff==0 and decel3_coeff==0:
+    #     print('!!!!!!!!!')
+    #     return 0
+    # max_decel = -env.env_params.additional_params['max_decel']
+    # accel_list = [env.k.vehicle.get_accel(veh_id) for veh_id in env.k.vehicle.get_ids()
+    #               if env.k.vehicle.get_accel(veh_id) is not None]
+    # accel = np.array(accel_list)
+    # decel_gap_list = max_decel - accel
+    # d_accel = decel_gap_list / abs(2 * max_decel)
+    #
+    # if any(accel_list):
+    #     print(f'al : {accel_list}')
+    #
+    # if env.env_params.additional_params.get('dc3_penalty', 0) != 0:
+    #     d_accel[np.where(d_accel>1)] = np.log(d_accel[d_accel>1])+1
+    #     print(d_accel)
+    #     accel_cliped = d_accel
+    #     return -decel3_coeff * sum(accel_cliped)
+    # else:
+    #     accel_cliped = d_accel.clip(min=None, max=1)
+    #     return -decel2_coeff * sum(accel_cliped)
+
     decel2_coeff = env.initial_config.reward_params.get('dc2_penalty', 0)
-    if decel2_coeff == 0:
+    decel3_coeff = env.initial_config.reward_params.get('dc3_penalty', 0)
+    if decel2_coeff == 0 and decel3_coeff == 0:
         return 0
     max_decel = -env.env_params.additional_params['max_decel']
     accel_list = [env.k.vehicle.get_accel(veh_id) for veh_id in env.k.vehicle.get_ids()
                   if env.k.vehicle.get_accel(veh_id) is not None and env.k.vehicle.get_accel(veh_id) < max_decel]
     accel = np.array(accel_list)
     decel_gap_list = max_decel - accel
-    d_accel = decel_gap_list/abs(2*max_decel)
+    d_accel = decel_gap_list / abs(2 * max_decel)
+
+    if decel3_coeff:
+        d_accel[np.where(d_accel>1)] = np.log(d_accel[d_accel>1])+1
+        return -decel3_coeff * sum(d_accel)
+
     accel_cliped = d_accel.clip(min=None, max=1)
     return -decel2_coeff * sum(accel_cliped)
+
+
+
+def unsafe_distance_penalty(env):
+    reward = 0
+    max_decel = env.env_params.additional_params['max_decel']
+    unsafe_penalty = env.initial_config.reward_params.get('unsafe_penalty', 0)
+    if unsafe_penalty == 0:
+        return 0
+    get_safe_distance = lambda vid: env.k.vehicle.get_speed(vid) ** 2 / (
+            2 * max_decel)
+    base_distance = 3.5
+
+    for rl_id in env.k.vehicle.get_rl_ids():
+        lane = env.k.vehicle.get_lane(rl_id)
+        leader = env.k.vehicle.get_lane_leaders(rl_id)[lane]
+        follower = env.k.vehicle.get_lane_followers(rl_id)[lane]
+        leader_safe_distance = get_safe_distance(leader) + base_distance
+        follower_safe_distance = get_safe_distance(follower) + base_distance
+        headway = env.k.vehicle.get_headway(rl_id)
+        tailway = env.k.vehicle.get_headway(follower)
+        if headway < leader_safe_distance or tailway < follower_safe_distance:
+            # if headway < leader_safe_distance:
+            #     print(f'[LEADER] : {leader}')
+            #     print(max(leader_safe_distance-headway, 0)/leader_safe_distance)
+            # elif tailway < follower_safe_distance:
+            #     print(f'[FOLLOWER] : {follower}')
+            #     print(max(follower_safe_distance-tailway, 0)/follower_safe_distance)
+            # print(f'lsd : {leader_safe_distance}\t fsd : {follower_safe_distance}\t h : {headway}\t t :{tailway}')
+            penalty = max(leader_safe_distance - headway, 0) / leader_safe_distance \
+                      + max(follower_safe_distance - tailway, 0) / follower_safe_distance
+            reward -= penalty * unsafe_penalty
+    return reward
 
 
 # bmil edit
@@ -91,6 +156,7 @@ def overtake_reward(env):
         env.last_lane_leaders[veh_id] = lane_leaders
 
     return reward
+
 
 def desired_velocity(env, fail=False, edge_list=None):
     r"""Encourage proximity to a desired velocity.
@@ -121,9 +187,9 @@ def desired_velocity(env, fail=False, edge_list=None):
     float
         reward value
     """
-    #bmil edit
-    # only_rl = env.initial_config.reward_params.get('only_rl', False)
-    only_rl = False
+    # bmil edit
+    only_rl = env.initial_config.reward_params.get('only_rl', False)
+    # only_rl = False
     if edge_list is None:
         veh_ids = env.k.vehicle.get_rl_ids() if only_rl else env.k.vehicle.get_ids()
     else:
@@ -146,6 +212,7 @@ def desired_velocity(env, fail=False, edge_list=None):
     eps = np.finfo(np.float32).eps
 
     return max(max_cost - cost, 0) / (max_cost + eps)
+
 
 def average_velocity(env, fail=False):
     """Encourage proximity to an average velocity.
@@ -482,7 +549,7 @@ def miles_per_megajoule(env, veh_ids=None, gain=.001):
     # convert from meters per joule to miles per joule
     mpj /= 1609.0
     # convert from miles per joule to miles per megajoule
-    mpj *= 10**6
+    mpj *= 10 ** 6
 
     return mpj * gain
 

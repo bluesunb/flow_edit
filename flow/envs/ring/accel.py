@@ -76,6 +76,7 @@ class AccelEnv(Env):
         # distance traveled
         self.prev_pos = dict()
         self.absolute_position = dict()
+        self.accumulated_reward = None
 
         super().__init__(env_params, sim_params, network, simulator)
 
@@ -181,3 +182,21 @@ class AccelEnv(Env):
             self.prev_pos[veh_id] = self.k.vehicle.get_x_by_id(veh_id)
 
         return obs
+
+class MyAccelEnv(AccelEnv):
+    def compute_reward(self, rl_actions, **kwargs):
+        reward = rewards.total_lc_reward(self)
+        if any(reward[1:]):
+            print(f'[a] : {reward}')
+
+        if self.accumulated_reward is None:
+            self.accumulated_reward = reward
+        else:
+            self.accumulated_reward += reward
+        if self.k.vehicle.get_timestep(self.k.vehicle.get_rl_ids()[0])==375200:
+            reward_rate = list((self.accumulated_reward/self.accumulated_reward[0]).round(3))
+            accu_reward = list(self.accumulated_reward.round(3))
+            print(f'[r]\t{reward_rate}\t{accu_reward}\n      INIT == {self.initial_config.reward_params}')
+            print(f'LC\t{-self.accumulated_reward[1]/self.initial_config.reward_params["simple_lc_penalty"]}\n'
+                  f'DC\t{-self.accumulated_reward[3]/self.initial_config.reward_params["dc2_penalty"]}')
+        return sum(reward)
