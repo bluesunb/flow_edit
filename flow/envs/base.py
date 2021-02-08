@@ -292,6 +292,20 @@ class Env(gym.Env, metaclass=ABCMeta):
 
             self.initial_state[veh_id] = (type_id, edge, lane, pos, speed)
 
+    def _to_lc_action(self, rl_action):
+        if rl_action is None:
+            return rl_action
+
+        for i in range(1, len(rl_action), 2):
+            if rl_action[i] < -1 + 2 / 3:
+                rl_action[i] = -1
+            elif rl_action[i] >= -1 + 4 / 3:
+                rl_action[i] = 1
+            else:
+                rl_action[i] = 0
+
+        return rl_action
+
     def step(self, rl_actions):
         """Advance the environment by one step.
 
@@ -324,6 +338,8 @@ class Env(gym.Env, metaclass=ABCMeta):
         """
         # bmil edit
         # print(f'[ACTION] : {rl_actions}')
+
+        rl_actions = self._to_lc_action(rl_actions)
 
         for _ in range(self.env_params.sims_per_step):
             self.time_counter += 1
@@ -515,8 +531,8 @@ class Env(gym.Env, metaclass=ABCMeta):
                 if self.simulator == 'traci':
                     # bmil edit
                     # kernel_api 대신에 kernel 쓰는 걸로 해결이 되려나?
-                    self.k.kernel_api.vehicle.remove(veh_id)  # FIXME: hack
-                    # self.k.vehicle.remove(veh_id)
+                    # self.k.kernel_api.vehicle.remove(veh_id)  # FIXME: hack
+                    self.k.vehicle.remove(veh_id)
                 self.k.vehicle.add(
                     veh_id=veh_id,
                     type_id=type_id,

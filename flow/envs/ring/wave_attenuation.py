@@ -18,6 +18,7 @@ from copy import deepcopy
 import numpy as np
 import random
 from scipy.optimize import fsolve
+from flow.core import rewards
 
 ADDITIONAL_ENV_PARAMS = {
     # maximum acceleration of autonomous vehicles
@@ -121,7 +122,7 @@ class WaveAttenuationEnv(Env):
             for veh_id in self.k.vehicle.get_ids()
         ])
 
-        if any(vel < -100) or kwargs['fail']:
+        if any(vel < -100):
             return 0.
 
         # reward average velocity
@@ -239,6 +240,10 @@ class WaveAttenuationPOEnv(WaveAttenuationEnv):
 
     """
 
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        super().__init__(env_params, sim_params, network, simulator)
+        self.rl_vel = []
+
     @property
     def observation_space(self):
         """See class definition."""
@@ -247,7 +252,8 @@ class WaveAttenuationPOEnv(WaveAttenuationEnv):
 
     def get_state(self):
         """See class definition."""
-        rl_id = self.k.vehicle.get_rl_ids()[0]
+        # rl_id = self.k.vehicle.get_rl_ids()[0]
+        rl_id =  self.k.vehicle.get_ids()[-1]
         lead_id = self.k.vehicle.get_leader(rl_id) or rl_id
 
         # normalizers
@@ -268,9 +274,97 @@ class WaveAttenuationPOEnv(WaveAttenuationEnv):
 
         return observation
 
+    def compute_reward(self, rl_actions, **kwargs):
+        # rl = self.k.vehicle.get_rl_ids()[0]
+        rl = self.k.vehicle.get_ids()[-1]
+        self.rl_vel.append(self.k.vehicle.get_speed(rl))
+        if self.k.vehicle.get_timestep(rl)%375200==0:
+            print(np.std(self.rl_vel, dtype=np.float32))
+        return super().compute_reward(rl_actions)
+
     def additional_command(self):
         """Define which vehicles are observed for visualization purposes."""
         # specify observed vehicles
-        rl_id = self.k.vehicle.get_rl_ids()[0]
+        # rl_id = self.k.vehicle.get_rl_ids()[0]
+        rl_id = self.k.vehicle.get_ids()[-1]
+        lead_id = self.k.vehicle.get_leader(rl_id) or rl_id
+        self.k.vehicle.set_observed(lead_id)
+
+class WaveAttenuationPOEnv2(WaveAttenuationEnv):
+    """POMDP version of WaveAttenuationEnv.
+
+    Note that this environment only works when there is one autonomous vehicle
+    on the network.
+
+    Required from env_params:
+
+    * max_accel: maximum acceleration of autonomous vehicles
+    * max_decel: maximum deceleration of autonomous vehicles
+    * ring_length: bounds on the ranges of ring road lengths the autonomous
+      vehicle is trained on
+
+    States
+        The state consists of the speed and headway of the ego vehicle, as well
+        as the difference in speed between the ego vehicle and its leader.
+        There is no assumption on the number of vehicles in the network.
+
+    Actions
+        See parent class
+
+    Rewards
+        See parent class
+
+    Termination
+        See parent class
+
+    """
+
+    @property
+    def observation_space(self):
+        """See class definition."""
+        return Box(low=-float('inf'), high=float('inf'),
+                   shape=(3, ), dtype=np.float32)
+
+    def get_state(self):
+        """See class definition."""
+        # rl_id = self.k.vehicle.get_rl_ids()[0]
+        rl_id =  self.k.vehicle.get_ids()[-1]
+        lead_id = self.k.vehicle.get_leader(rl_id) or rl_id
+
+        # normalizers
+        max_speed = 15.
+        if self.env_params.additional_params['ring_length'] is not None:
+            max_length = self.env_params.additional_params['ring_length'][1]
+        else:
+            max_length = self.k.network.length()
+
+        observation = np.array([
+            self.k.vehicle.get_speed(rl_id) / max_speed,
+            (self.k.vehicle.get_speed(lead_id) -
+             self.k.vehicle.get_speed(rl_id)) / max_speed,
+            (self.k.vehicle.get_x_by_id(lead_id) -
+             self.k.vehicle.get_x_by_id(rl_id)) % self.k.network.length()
+            / max_length
+        ])
+
+        return observation
+
+    def compute_reward(self, rl_actions, **kwargs):
+        rl = self.k.vehicle.get_rl_ids()[0]
+        # rl = self.k.vehicle.get_ids()[-1]
+        # with open('log.txt', 'a') as f:
+        #     timestep = self.k.vehicle.get_timestep(rl)
+        #     acc = self.k.vehicle.get_accel(rl)
+        #     e_consume = rewards.veh_energy_consumption(self, rl)
+        #     f.write(f'{timestep}\n{acc or 0}\n{e_consume or 0}\n')
+        e_consume_penalty = rewards.veh_energy_consumption(self, rl)
+        co2_emission = self.k.vehicle.get_co2_emission(self, rl)
+        return super().compute_reward(rl_actions) + e_consume_penalty
+
+    def additional_command(self):
+        """Define which vehicles are observed for visualization purposes."""
+        # specify observed vehicles
+        # rl_id = self.k.vehicle.get_rl_ids()[0]
+        rl_id = self.k.vehicle.get_ids()[-1]
         lead_id = self.k.vehicle.get_leader(rl_id) or rl_id
         self.k.vehicle.set_observed(lead_id)

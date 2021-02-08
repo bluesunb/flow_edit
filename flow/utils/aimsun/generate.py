@@ -618,7 +618,7 @@ def set_vehicles_color(model):
         vehicles = model.getCatalog().getObjectsByType(
             model.getType("GKVehicle"))
         if vehicles is not None:
-            ramp.lines(len(vehicles))
+            ramp.ppolines(len(vehicles))
             for i, vehicle in enumerate(vehicles.itervalues()):
                 color_range = view_style.addRange(vehicle.getName())
                 color_range.color = ramp.getColor(i)

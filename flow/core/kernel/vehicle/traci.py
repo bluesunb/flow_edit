@@ -551,6 +551,37 @@ class TraCIVehicle(KernelVehicle):
             return [self.get_fuel_consumption(vehID, error) for vehID in veh_id]
         return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_FUELCONSUMPTION, error) * ml_to_gallons
 
+    #bmil edit
+    def get_co2_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_co2_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_CO2EMISSION, error)
+
+    def get_co_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_co_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_COEMISSION, error)
+
+    def get_hc_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_hc_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_HCEMISSION, error)
+
+    def get_pmx_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_pmx_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_PMXEMISSION, error)
+
+    def get_nox_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_nox_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_NOXEMISSION, error)
+
+    def get_noise_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_noise_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_NOISEEMISSION, error)
+
     def get_previous_speed(self, veh_id, error=-1001):
         """See parent class."""
         if isinstance(veh_id, (list, np.ndarray)):
@@ -689,7 +720,8 @@ class TraCIVehicle(KernelVehicle):
             error = list()
         if isinstance(veh_id, (list, np.ndarray)):
             return [self.get_lane_leaders(vehID, error) for vehID in veh_id]
-        return self.__vehicles[veh_id]["lane_leaders"]
+        # return self.__vehicles[veh_id]["lane_leaders"]
+        return self.__vehicles.get(veh_id, {}).get("lane_leaders", error)
 
     def set_lane_tailways(self, veh_id, lane_tailways):
         """Set the lane tailways of the specified vehicle."""
@@ -977,6 +1009,13 @@ class TraCIVehicle(KernelVehicle):
     def apply_lane_change(self, veh_ids, direction):
         """See parent class."""
         # to hand the case of a single vehicle
+
+        #bmil edit
+        # print(veh_ids)
+        rl = self.get_rl_ids()
+        timestep = self.get_timestep(rl[0])
+        # print(f'[{timestep}] <traci> DIR : {direction}')
+
         if type(veh_ids) == str:
             veh_ids = [veh_ids]
             direction = [direction]
@@ -1001,12 +1040,28 @@ class TraCIVehicle(KernelVehicle):
 
             # perform the requested lane action action in TraCI
             if target_lane != this_lane:
+                if self.get_lane(veh_id) == target_lane:
+                    break
+                else:
+                    self.kernel_api.vehicle.changeLane(veh_id, int(target_lane), self.sim_step)
+                # print(f'[{timestep}] <traci> before lane : {self.get_lane(rl[0])}')
+                # print(f'[{timestep}] <traci> this, target : {this_lane, int(target_lane)}')
+                # for i in range(10):
+                #     if self.get_lane(veh_id) == target_lane:
+                #         break
+                #     else:
+                #         self.kernel_api.vehicle.changeLane(veh_id, int(target_lane), self.sim_step)
+                # else:
+                #     print(f'[{timestep}] <traci> LC Failed//')
+
                 self.kernel_api.vehicle.changeLane(
                     veh_id, int(target_lane), self.sim_step)
 
                 if veh_id in self.get_rl_ids():
                     self.prev_last_lc[veh_id] = \
                         self.__vehicles[veh_id]["last_lc"]
+
+            # print(f'[{timestep}] <traci> after lane : {self.get_lane(rl[0])}')
 
     def choose_routes(self, veh_ids, route_choices):
         """See parent class."""

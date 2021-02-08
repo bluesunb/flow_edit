@@ -263,7 +263,7 @@ class BaseKernelNetwork(object):
     def gen_my_lc_random(self, initial_config, num_vehicles):
         length = self.network.net_params.additional_params['length']
         min_gap = initial_config.min_gap
-        my_min_gap = min_gap + 25
+        my_min_gap = min_gap + 23
         startpos, startlane = [], []
 
         if length < num_vehicles * (VEHICLE_LENGTH + my_min_gap):

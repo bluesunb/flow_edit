@@ -2,7 +2,7 @@
 from flow.core.params import VehicleParams, SumoCarFollowingParams, SumoLaneChangeParams
 from flow.core.params import SumoParams, EnvParams, InitialConfig, NetParams
 from flow.controllers import RLController, IDMController, ContinuousRouter, SimLaneChangeController
-from flow.envs import WaveAttenuationEnv, LaneChangeAccelEnv, MyLaneChangeAccelEnv
+from flow.envs import WaveAttenuationEnv, LaneChangeAccelEnv, MyLaneChangeAccelEnv, LaneChangeAccelPOEnv
 from flow.networks import RingNetwork
 
 import os
@@ -22,41 +22,26 @@ vehicles.add(
     veh_id='outline',
     acceleration_controller=(IDMController, {'v0': 2}),
     routing_controller=(ContinuousRouter, {}),
-    initial_speed=3,
-    num_vehicles=6,
+    initial_speed=2,
+    num_vehicles=14,
     car_following_params=SumoCarFollowingParams(
         speed_mode='aggressive',
-        min_gap=5
+        min_gap=0
     )
 )
 
-# vehicles.add(
-#     veh_id='inline',
-#     acceleration_controller=(IDMController, {'v0': 2}),
-#     routing_controller=(ContinuousRouter, {}),
-#     initial_speed=3,
-#     num_vehicles=3,
-#     car_following_params=SumoCarFollowingParams(
-#         speed_mode='aggressive',
-#         min_gap=0
-#     )
-# )
 
 vehicles.add(
     veh_id='rl',
-    acceleration_controller=(IDMController, {}),
+    acceleration_controller=(RLController, {}),
     routing_controller=(ContinuousRouter, {}),
-    lane_change_params=SumoLaneChangeParams(
-        lane_change_mode=528,
-        lc_speed_gain=10,
-    ),
     initial_speed=5,
     num_vehicles=1,
 )
 
 flow_params = dict(
     exp_tag=current_file_name,
-    env_name=LaneChangeAccelEnv,
+    env_name=MyLaneChangeAccelEnv,
     network=RingNetwork,
     simulator='traci',
     sim=SumoParams(
@@ -72,7 +57,7 @@ flow_params = dict(
         additional_params={
             "max_accel": 3,
             "max_decel": 3,
-            "ring_length": [700, 770],
+            "ring_length": [700,770],
             "lane_change_duration": 5,
             "target_velocity": 10,
             'sort_vehicles': False
@@ -80,7 +65,7 @@ flow_params = dict(
     ),
     net=NetParams(
         additional_params={
-            "length": 260,
+            "length": 700,
             "lanes": 2,
             "speed_limit": 30,
             "resolution": 40,
@@ -98,9 +83,9 @@ flow_params = dict(
         reward_params={
             'only_rl': False,
             'simple_lc_penalty': 0.1,
-            'unnecessary_lc_penalty': (0, 0),
+            'unnecessary_lc_penalty': (0,0),
             'max_lc_headway': 0,
-            'dc3_penalty': 0.2,
+            'dc3_penalty': 0,
             'overtake_reward': 0,
-            'unsafe_penalty': 0,
-        }, ), )
+            'unsafe_penalty': 0.25,
+		},),)

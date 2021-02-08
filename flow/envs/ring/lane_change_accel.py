@@ -78,13 +78,6 @@ class LaneChangeAccelEnv(AccelEnv):
                     'Environment parameter "{}" not supplied'.format(p))
 
         super().__init__(env_params, sim_params, network, simulator)
-        #bmil edit
-        self.last_lane_leaders = dict()
-        self.last_states = None
-        self.accumulated_reward = None
-
-        self.timesteps = []
-        self.speeds = defaultdict(list)
 
     @property
     def action_space(self):
@@ -107,54 +100,18 @@ class LaneChangeAccelEnv(AccelEnv):
             dtype=np.float32)
 
     def compute_reward(self, rl_actions, **kwargs):
-        # max_speed = self.k.network.max_speed()
-        # length = self.k.network.length()
-        # max_lanes = max(
-        #     self.k.network.num_lanes(edge)
-        #     for edge in self.k.network.get_edge_list())
-        # state = self.get_state().reshape((3,7))*np.array([[max_speed, length, max_lanes]]).T
-        # action = rl_actions
-        # reward = rewards.total_lc_reward(self)
-        # rl_id = self.k.vehicle.get_rl_ids()[0]
-        # # print(f'============{self.k.vehicle.get_timestep(rl_id)}============')
-        # # print(f'last_state\t{self.last_states}')
-        # # print(f'state\t{state.reshape((3,7))}')
-        # # print(f'action\t{action}')
-        # # print(f'reward\t{sum(reward)}={reward}')
-        # with open('/home/bmil10/flow-autonomous-driving/log.txt', 'a') as f:
-        #     f.write(f'===== {self.k.vehicle.get_timestep(rl_id)} =====')
-        #     f.write(f'last_state : {self.last_states}\n')
-        #     f.write(f'state : {state}\n')
-        #     f.write(f'action : {action}')
-        #     f.write(f'reward : {sum(reward)}={reward}\n')
-        # self.last_states = state
-        reward = rewards.total_lc_reward(self)
-        ids = self.k.vehicle.get_ids()
-        self.timesteps.append(self.k.vehicle.get_timestep(ids[-1])/10000)
-        for veh_id in ids:
-            self.speeds[veh_id].append(self.k.vehicle.get_speed(veh_id) or 0)
-        if self.k.vehicle.get_timestep(self.k.vehicle.get_ids()[-1]) == 375200:
-            self.draw_plot()
-        return sum(reward)
+        """See class definition."""
+        # compute the system-level performance of vehicles from a velocity
+        # perspective
+        reward = rewards.desired_velocity(self, fail=kwargs["fail"])
 
-    def draw_plot(self):
-        veh = list(self.speeds.keys())
-        plt.subplot(2, 1, 1)
-        for v in veh[:-1]:
-            plt.plot(self.timesteps, self.speeds[v])
-        plt.xlabel('timestep(s)')
-        plt.ylabel('speed(m/s)')
-        plt.legend(veh[:-1])
-        plt.grid(True)
-        # plt.show()
+        # punish excessive lane changes by reducing the reward by a set value
+        # every time an rl car changes lanes (10% of max reward)
+        for veh_id in self.k.vehicle.get_rl_ids():
+            if self.k.vehicle.get_last_lc(veh_id) == self.time_counter:
+                reward -= 0.1
 
-        plt.subplot(2, 1, 2)
-        plt.plot(self.timesteps, self.speeds[veh[-1]])
-        plt.xlabel('timestep(s)')
-        plt.ylabel('speed(m/s)')
-        plt.legend(veh[-1:])
-        plt.grid(True)
-        plt.show()
+        return reward
 
     def get_state(self):
         """See class definition."""
@@ -174,6 +131,7 @@ class LaneChangeAccelEnv(AccelEnv):
 
         return np.array(speed + pos + lane)
 
+
     def _apply_rl_actions(self, actions):
         """See class definition."""
         acceleration = actions[::2]
@@ -185,17 +143,6 @@ class LaneChangeAccelEnv(AccelEnv):
             if veh_id in self.k.vehicle.get_rl_ids()
         ]
 
-        # bmil edit
-        for i in range(len(direction)):
-            d = direction[i]
-            if d >= -1 and d < -0.3333:
-                direction[i] = -1
-            elif 0.3333 < d and d <= 1:
-                direction[i] = 1
-            else:
-                direction[i] = 0
-
-
         # represents vehicles that are allowed to change lanes
         non_lane_changing_veh = \
             [self.time_counter <=
@@ -206,14 +153,6 @@ class LaneChangeAccelEnv(AccelEnv):
         direction[non_lane_changing_veh] = \
             np.array([0] * sum(non_lane_changing_veh))
 
-        # raise ArithmeticError('MYERROR!!!!')
-        #bmil edit
-        # print(f'[LCLCLC] : {[acceleration[0], direction[0]]}')
-
-        # if self.k.vehicle.get_timestep(sorted_rl_ids[0]) == 131900:
-        #     d = self.k.vehicle.get_lane(sorted_rl_ids[0])
-        #     direction[0]=1 if d==0 else -1
-        #     print(direction)
         self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
         self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)
 
@@ -265,6 +204,7 @@ class LaneChangeAccelPOEnv(LaneChangeAccelEnv):
         self.num_lanes = max(self.k.network.num_lanes(edge)
                              for edge in self.k.network.get_edge_list())
         self.visible = []
+
 
     @property
     def observation_space(self):
@@ -332,22 +272,105 @@ class LaneChangeAccelPOEnv(LaneChangeAccelEnv):
             self.k.vehicle.set_observed(veh_id)
 
 class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
-    def compute_reward(self, rl_actions, **kwargs):
-        reward = rewards.total_lc_reward(self)
+
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        super().__init__(env_params, sim_params, network, simulator=simulator)
+        self.accumulated_reward = None
+        self.last_lc = None
+
+
+    def _to_lc_action(self, rl_action):
+        if rl_action is None:
+            return rl_action
+
+        for i in range(1,len(rl_action), 2):
+            if rl_action[i] < -1+2/3:
+                rl_action[i] = -1
+            elif rl_action[i] >= -1+4/3:
+                rl_action[i] = 1
+            else:
+                rl_action[i] = 0
+
+        return rl_action
+
+    def _apply_rl_actions(self, actions):
+        """See class definition."""
+
+        #bmil edit
+        # actions = self._to_lc_action(actions)
+
+        acceleration = actions[::2]
+        direction = actions[1::2]
+
+        self.last_lc = self.k.vehicle.get_lane(self.k.vehicle.get_rl_ids())
+
+        # re-arrange actions according to mapping in observation space
+        sorted_rl_ids = [
+            veh_id for veh_id in self.sorted_ids
+            if veh_id in self.k.vehicle.get_rl_ids()
+        ]
+
+        # print(f'[{self.k.vehicle.get_timestep("rl_0")}] <lc_accel> ROWDIR : {direction}')
 
         # bmil edit
-        timestep = self.k.vehicle.get_timestep(self.k.vehicle.get_rl_ids()[0])
-        # msg = ['sim_lc', 'unnec_lc', 'dc2', 'ot', 'uns']
-        # if any(reward[1:]):
-        #     print(f'[{msg[np.where(reward[1:]<0)[0][0]]}] : {reward.round(3)}')
+        # for i in range(len(direction)):
+        #     d = direction[i]
+        #     if d >= -1 and d < -0.3333:
+        #         direction[i] = -1
+        #     elif 0.3333 < d and d <= 1:
+        #         direction[i] = 1
+        #     else:
+        #         direction[i] = 0
+
+        # represents vehicles that are allowed to change lanes
+        non_lane_changing_veh = \
+            [self.time_counter <=
+             self.env_params.additional_params["lane_change_duration"]
+             + self.k.vehicle.get_last_lc(veh_id)
+             for veh_id in sorted_rl_ids]
+
+        # vehicle that are not allowed to change have their directions set to 0
+        direction[non_lane_changing_veh] = \
+            np.array([0] * sum(non_lane_changing_veh))
+
+        self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
+        self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)
+
+
+    def compute_reward(self, rl_actions, **kwargs):
+        rl = self.k.vehicle.get_rl_ids()[0]
+        timestep = self.k.vehicle.get_timestep(rl)
+
+        reward = rewards.total_lc_reward(self, rl_actions)
         if self.accumulated_reward is None:
-            self.accumulated_reward = reward
-        else:
-            self.accumulated_reward += reward
+            self.accumulated_reward = np.zeros_like(reward)
+        self.accumulated_reward += reward
+
         if timestep%375200==0:
-            reward_rate = list((self.accumulated_reward/self.accumulated_reward[0]).round(3))
-            accu_reward = list(self.accumulated_reward.round(3))
-            print(f'[r]\t{reward_rate}\t{accu_reward}\n      INIT == {self.initial_config.reward_params}')
-            print(f'LC\t{-self.accumulated_reward[1]/self.initial_config.reward_params["simple_lc_penalty"]}\n'
-                  f'DC\t{-self.accumulated_reward[3]/(self.initial_config.reward_params.get("dc2_penalty") or self.initial_config.reward_params.get("dc3_penalty"))}')
+            self.analyze_reward()
         return sum(reward)
+
+    def accumulate_reward(self, reward):
+        self.accumulated_reward += reward
+
+    def analyze_reward(self):
+        accu_reward = self.accumulated_reward.round(3).tolist()
+        reward_rate = (self.accumulated_reward /
+                       (self.accumulated_reward[0] or self.accumulated_reward[1])).round(3).tolist()
+
+        #print reward params
+        from pprint import pprint
+        reward_params = self.initial_config.reward_params
+        pprint(reward_params)
+
+        print(f'[r]: {reward_rate}')
+        print(f'[r]: {accu_reward}')
+
+        #print num's of LC, DC
+        print(f'LC : {round(-self.accumulated_reward[2]/reward_params.get("simple_lc_penalty",float("inf")), 1)}')
+        dc = 0
+        penalty = reward_params.get("dc2_penalty",0) or reward_params.get("dc3_penalty",0)
+        if penalty != 0:
+            dc = -self.accumulated_reward[4]/penalty
+        print(f'DC : {round(dc, 3)}')
+

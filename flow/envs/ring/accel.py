@@ -78,6 +78,8 @@ class AccelEnv(Env):
         self.absolute_position = dict()
         self.accumulated_reward = None
 
+        self.rl_vel = []
+
         super().__init__(env_params, sim_params, network, simulator)
 
     @property
@@ -109,6 +111,13 @@ class AccelEnv(Env):
 
     def compute_reward(self, rl_actions, **kwargs):
         """See class definition."""
+        #bmil edit
+        rl = self.k.vehicle.get_ids()[-1]
+        self.rl_vel.append(self.k.vehicle.get_speed(rl))
+        if self.k.vehicle.get_timestep(rl) % 300000 == 0:
+            print(f'std : {np.std(self.rl_vel, dtype=np.float32)}')
+            print(f'mean : {np.mean(self.rl_vel, dtype=np.float32)}')
+
         if self.env_params.evaluate:
             return np.mean(self.k.vehicle.get_speed(self.k.vehicle.get_ids()))
         else:

@@ -23,7 +23,7 @@ vehicles.add(
     acceleration_controller=(IDMController, {'v0': 2}),
     routing_controller=(ContinuousRouter, {}),
     initial_speed=2,
-    num_vehicles=6,
+    num_vehicles=14,
     car_following_params=SumoCarFollowingParams(
         speed_mode='aggressive',
         min_gap=0
@@ -57,7 +57,7 @@ flow_params = dict(
         additional_params={
             "max_accel": 3,
             "max_decel": 3,
-            "ring_length": [220, 270],
+            "ring_length": [700,770],
             "lane_change_duration": 5,
             "target_velocity": 10,
             'sort_vehicles': False
@@ -65,7 +65,7 @@ flow_params = dict(
     ),
     net=NetParams(
         additional_params={
-            "length": 260,
+            "length": 700,
             "lanes": 2,
             "speed_limit": 30,
             "resolution": 40,
@@ -74,18 +74,18 @@ flow_params = dict(
 
     veh=vehicles,
     initial=InitialConfig(
-        spacing='my',
-        lanes_distribution=1,
-        additional_params={
-            'inline_veh_nums': sum(['inline' in vid for vid in vehicles.ids]),
-            'outline_veh_nums': sum(['outline' in vid for vid in vehicles.ids]),
-        },
+        spacing='lc_random',
+        # lanes_distribution=1,
+        # additional_params={
+        #    'inline_veh_nums': sum(['inline' in vid for vid in vehicles.ids]),
+        #    'outline_veh_nums': sum(['outline' in vid for vid in vehicles.ids]),
+        # },
         reward_params={
-            'only_rl': True,
-            'simple_lc_penalty': 0.2,
+            'only_rl': False,
+            'simple_lc_penalty': 0.1,
             'unnecessary_lc_penalty': (0,0),
             'max_lc_headway': 0,
-            'dc2_penalty': 0.2,
+            'dc3_penalty': 0,
             'overtake_reward': 0,
-            'unsafe_penalty': 0.3,
+            'unsafe_penalty': 0.35,
 		},),)

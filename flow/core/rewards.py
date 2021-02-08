@@ -4,17 +4,43 @@ import numpy as np
 
 
 # bmil edit
-def total_lc_reward(env):
+def total_lc_reward(env, rl_action):
     reward_list = [
         desired_velocity(env, fail=False, edge_list=None),
+        rl_mean_speed(env),
         simple_lc_penalty(env),
         unnecessary_lc_penalty(env),
         punish_emergency_decel2(env),
         overtake_reward(env),
         unsafe_distance_penalty(env),
+        rl_action_penalty(env, rl_action),
 
     ]
     return np.array(reward_list)
+
+def rl_action_penalty(env, rl_action):
+    if rl_action is None:
+        return 0
+    action_penalty = env.initial_config.reward_params.get('rl_action_penalty', 0)
+    if action_penalty==0:
+        return 0
+
+    rl = env.k.vehicle.get_rl_ids()
+    timestep = env.k.vehicle.get_timestep(rl[0])
+    lc_failed = np.array(env.last_lc) == np.array(env.k.vehicle.get_lane(rl))
+    # print(f'[{timestep}] <rl_action_p> : {env.last_lc, env.k.vehicle.get_lane(rl)}, {rl_action[1]}, {lc_failed}')
+    # if sum(lc_failed) and \
+    #         (rl_action[1] < -1+2/3 or rl_action[1] > -1+4/3):
+    if sum(lc_failed):
+        # print(f'[{timestep}] <rl_action_p> : ////////////////////////////////////////{env.last_lc, env.k.vehicle.get_lane(rl)}')
+        return -action_penalty * sum(lc_failed)
+    else:
+        return 0
+
+    # rl = env.k.vehicle.get_rl_ids()
+    # now_lane = env.k.vehicle.get_lane(rl[0])
+
+
 
 
 def simple_lc_penalty(env):
@@ -188,8 +214,9 @@ def desired_velocity(env, fail=False, edge_list=None):
         reward value
     """
     # bmil edit
-    only_rl = env.initial_config.reward_params.get('only_rl', False)
-    # only_rl = False
+    only_rl = env.initial_config.reward_params.get('only_rl')
+    if only_rl is None or only_rl==0:
+        return 0
     if edge_list is None:
         veh_ids = env.k.vehicle.get_rl_ids() if only_rl else env.k.vehicle.get_ids()
     else:
@@ -213,6 +240,18 @@ def desired_velocity(env, fail=False, edge_list=None):
 
     return max(max_cost - cost, 0) / (max_cost + eps)
 
+def rl_mean_speed(env):
+    vel = np.array(env.k.vehicle.get_speed(env.k.vehicle.get_rl_ids()))
+    coeff = env.initial_config.reward_params.get('rl_mean_speed', 0)
+    target_vel = env.env_params.additional_params['target_velocity']
+    if coeff == 0:
+        return 0
+
+    if any(vel < -100):
+        return 0.
+    if len(vel) == 0:
+        return 0.
+    return np.mean(vel) * coeff / target_vel
 
 def average_velocity(env, fail=False):
     """Encourage proximity to an average velocity.
@@ -507,6 +546,8 @@ def veh_energy_consumption(env, veh_id, gain=.001):
 
     accel = abs(speed - prev_speed) / env.sim_step
 
+    # amount of energy consumed per unit time derived by
+    # Inertial force of car + Friction of wheel + Drag force of car
     power += M * speed * accel + M * g * Cr * speed + 0.5 * rho * A * Ca * speed ** 3
 
     return -gain * power
