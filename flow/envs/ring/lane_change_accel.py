@@ -4,6 +4,9 @@ from flow.envs.ring.accel import AccelEnv
 from flow.core import rewards
 
 from gym.spaces.box import Box
+from gym.spaces.tuple import Tuple
+from gym.spaces.multi_discrete import MultiDiscrete
+
 import numpy as np
 from collections import defaultdict
 import matplotlib.pyplot as plt
@@ -271,14 +274,6 @@ class LaneChangeAccelPOEnv(LaneChangeAccelEnv):
         for veh_id in self.visible:
             self.k.vehicle.set_observed(veh_id)
 
-class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
-
-    def __init__(self, env_params, sim_params, network, simulator='traci'):
-        super().__init__(env_params, sim_params, network, simulator=simulator)
-        self.accumulated_reward = None
-        self.last_lc = None
-
-
     def _to_lc_action(self, rl_action):
         if rl_action is None:
             return rl_action
@@ -293,11 +288,30 @@ class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
 
         return rl_action
 
+class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
+
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        super().__init__(env_params, sim_params, network, simulator=simulator)
+        self.accumulated_reward = None
+        self.last_lc = None
+
+    def _to_lc_action(self, rl_action):
+        if rl_action is None:
+                return rl_action
+        for i in range(1, len(rl_action), 2):
+            if rl_action[i] < -1 + 2 / 3:
+                rl_action[i] = -1
+            elif rl_action[i] >= -1 + 4 / 3:
+                rl_action[i] = 1
+            else:
+                rl_action[i] = 0
+        return rl_action
+
     def _apply_rl_actions(self, actions):
         """See class definition."""
 
         #bmil edit
-        # actions = self._to_lc_action(actions)
+        actions = self._to_lc_action(actions)
 
         acceleration = actions[::2]
         direction = actions[1::2]
@@ -323,15 +337,15 @@ class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
         #         direction[i] = 0
 
         # represents vehicles that are allowed to change lanes
-        non_lane_changing_veh = \
-            [self.time_counter <=
-             self.env_params.additional_params["lane_change_duration"]
-             + self.k.vehicle.get_last_lc(veh_id)
-             for veh_id in sorted_rl_ids]
+        # non_lane_changing_veh = \
+        #     [self.time_counter <=
+        #      self.env_params.additional_params["lane_change_duration"]
+        #      + self.k.vehicle.get_last_lc(veh_id)
+        #      for veh_id in sorted_rl_ids]
 
         # vehicle that are not allowed to change have their directions set to 0
-        direction[non_lane_changing_veh] = \
-            np.array([0] * sum(non_lane_changing_veh))
+        # direction[non_lane_changing_veh] = \
+        #     np.array([0] * sum(non_lane_changing_veh))
 
         self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
         self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)
@@ -340,23 +354,25 @@ class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
     def compute_reward(self, rl_actions, **kwargs):
         rl = self.k.vehicle.get_rl_ids()[0]
         timestep = self.k.vehicle.get_timestep(rl)
-
         reward = rewards.total_lc_reward(self, rl_actions)
-        if self.accumulated_reward is None:
-            self.accumulated_reward = np.zeros_like(reward)
-        self.accumulated_reward += reward
 
+        # print(f'[{timestep}] r_raw: {reward.round(3)}')
+
+        self.accumulate_reward(reward)
         if timestep%375200==0:
             self.analyze_reward()
         return sum(reward)
 
     def accumulate_reward(self, reward):
-        self.accumulated_reward += reward
+        if self.accumulated_reward is None:
+            self.accumulated_reward = reward.astype(np.float32)
+        else:
+            self.accumulated_reward += reward.astype(np.float32)
 
     def analyze_reward(self):
-        accu_reward = self.accumulated_reward.round(3).tolist()
+        accu_reward = self.accumulated_reward.round(3)
         reward_rate = (self.accumulated_reward /
-                       (self.accumulated_reward[0] or self.accumulated_reward[1])).round(3).tolist()
+                       (self.accumulated_reward[0] or self.accumulated_reward[1])).round(3)
 
         #print reward params
         from pprint import pprint
@@ -374,3 +390,53 @@ class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
             dc = -self.accumulated_reward[4]/penalty
         print(f'DC : {round(dc, 3)}')
 
+
+class MyAutoLaneChangeAccelEnv(LaneChangeAccelEnv):
+
+    def compute_reward(self, rl_actions, **kwargs):
+        return super().compute_reward(rl_actions, **kwargs)
+
+class TestLCEnv(MyLaneChangeAccelEnv):
+
+    @property
+    def action_space(self):
+        max_decel = self.env_params.additional_params["max_decel"]
+        max_accel = self.env_params.additional_params["max_accel"]
+
+        lb = [-abs(max_decel)] * self.initial_vehicles.num_rl_vehicles
+        ub = [max_accel] * self.initial_vehicles.num_rl_vehicles
+
+        lc_b = [3]*self.initial_vehicles.num_rl_vehicles
+
+        # return Box(np.array(lb), np.array(ub), dtype=np.float32)
+        return Tuple((Box(np.array(lb), np.array(ub), dtype=np.float32), MultiDiscrete(np.array(lc_b))))
+
+    def compute_reward(self, rl_actions, **kwargs):
+        return super().compute_reward(rl_actions, **kwargs)
+
+    def _apply_rl_actions(self, actions):
+
+        acceleration, raw_direction = actions
+
+        direction = np.array([d-1 for d in raw_direction])
+
+        self.last_lc = self.k.vehicle.get_lane(self.k.vehicle.get_rl_ids())
+
+        # re-arrange actions according to mapping in observation space
+        sorted_rl_ids = [
+            veh_id for veh_id in self.sorted_ids
+            if veh_id in self.k.vehicle.get_rl_ids()
+        ]
+
+        # represents vehicles that are allowed to change lanes
+        # non_lane_changing_veh = \
+        #     [self.time_counter <=
+        #      self.env_params.additional_params["lane_change_duration"]
+        #      + self.k.vehicle.get_last_lc(veh_id)
+        #      for veh_id in sorted_rl_ids]
+        # vehicle that are not allowed to change have their directions set to 0
+        # direction[non_lane_changing_veh] = \
+        #     np.array([0] * sum(non_lane_changing_veh))
+
+        self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
+        self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)

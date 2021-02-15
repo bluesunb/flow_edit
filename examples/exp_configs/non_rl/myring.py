@@ -23,10 +23,10 @@ vehicles.add(
     acceleration_controller=(IDMController, {'v0': 2}),
     routing_controller=(ContinuousRouter, {}),
     initial_speed=3,
-    num_vehicles=6,
+    num_vehicles=12,
     car_following_params=SumoCarFollowingParams(
         speed_mode='aggressive',
-        min_gap=5
+        min_gap=0
     )
 )
 
@@ -80,7 +80,7 @@ flow_params = dict(
     ),
     net=NetParams(
         additional_params={
-            "length": 260,
+            "length": 700,
             "lanes": 2,
             "speed_limit": 30,
             "resolution": 40,
@@ -89,7 +89,7 @@ flow_params = dict(
 
     veh=vehicles,
     initial=InitialConfig(
-        spacing='lc_random',
+        spacing='my3',
         # lanes_distribution=1,
         # additional_params={
         #    'inline_veh_nums': sum(['inline' in vid for vid in vehicles.ids]),

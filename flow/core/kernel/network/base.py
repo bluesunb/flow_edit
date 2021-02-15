@@ -254,6 +254,9 @@ class BaseKernelNetwork(object):
         elif initial_config.spacing == 'lc_random':
             startpositions, startlanes = self.gen_my_lc_random(
                 initial_config, num_vehicles)
+        elif initial_config.spacing == 'my3':
+            startpositions, startlanes = self.gen_my_start_pos3(
+                initial_config, num_vehicles)
         else:
             raise FatalFlowError('"spacing" argument in initial_config does '
                                  'not contain a valid option')
@@ -340,6 +343,40 @@ class BaseKernelNetwork(object):
 
         return startpos, startlane
 
+    def gen_my_start_pos3(self, initial_config, num_vehicles):
+        length = self.network.net_params.additional_params['length']
+        min_gap = initial_config.min_gap
+        my_min_gap = min_gap + 23
+        startpos, startlane = [], []
+
+        if length < num_vehicles * (VEHICLE_LENGTH + my_min_gap):
+            raise ValueError('num of vehicles are too many')
+
+        surplus_gap = length - num_vehicles * (VEHICLE_LENGTH + my_min_gap)
+        tmp = list(range(int(num_vehicles//2+num_vehicles%2))) + list(reversed(range(int(num_vehicles//2))))
+        surplus_gap_list = np.array(tmp)/sum(tmp) * surplus_gap
+
+
+        edges = ['bottom', 'right', 'top', 'left']
+        edge_length = length // 4
+
+        startpos.append((edges[0], 0))
+        startlane.append(0)
+        pos = 0
+        for veh, gap in zip(range(num_vehicles - 1), surplus_gap_list):
+            pos = pos + my_min_gap + VEHICLE_LENGTH + gap
+            startpos.append((edges[int(pos // edge_length)], pos % edge_length))
+            startlane.append((startlane[-1] + 1) % 2)
+        else:
+            rl_pos = startpos.pop(0)
+            rl_lane = startlane.pop(0)
+            startpos.append(rl_pos)
+            startlane.append(rl_lane)
+
+        return startpos, startlane
+
+
+
     def gen_even_start_pos(self, initial_config, num_vehicles):
         """Generate uniformly spaced starting positions.
 
@@ -361,6 +398,8 @@ class BaseKernelNetwork(object):
             list of start positions [(edge0, pos0), (edge1, pos1), ...]
         list of int
             list of start lanes
+
+
         """
         if isinstance(initial_config.edges_distribution, dict):
             # check that the number of vehicle in edges_distribution matches

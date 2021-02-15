@@ -7,7 +7,6 @@ from flow.controllers import IDMController, ContinuousRouter
 from flow.core.params import SumoParams, EnvParams, InitialConfig, NetParams
 from flow.core.params import VehicleParams
 from flow.envs.ring.accel import AccelEnv, ADDITIONAL_ENV_PARAMS
-from flow.envs.ring.wave_attenuation import WaveAttenuationPOEnv
 from flow.networks.ring import RingNetwork, ADDITIONAL_NET_PARAMS
 
 
@@ -16,20 +15,14 @@ vehicles.add(
     veh_id="idm",
     acceleration_controller=(IDMController, {}),
     routing_controller=(ContinuousRouter, {}),
-    num_vehicles=21)
+    num_vehicles=22)
 
-vehicles.add(
-    veh_id="rl",
-    acceleration_controller=(IDMController, {}),
-    routing_controller=(ContinuousRouter, {}),
-    num_vehicles=1)
 
 flow_params = dict(
     # name of the experiment
     exp_tag='ring',
 
     # name of the flow environment the experiment is running on
-    # env_name=AccelEnv,
     env_name=AccelEnv,
 
     # name of the network class the experiment is running on
@@ -46,27 +39,14 @@ flow_params = dict(
 
     # environment related parameters (see flow.core.params.EnvParams)
     env=EnvParams(
-        horizon=3000,
-        clip_actions=False,
-        additional_params={
-            "max_accel": 3,
-            "max_decel": 3,
-            "ring_length": [220,260],
-            "lane_change_duration": 5,
-            "target_velocity": 10,
-            'sort_vehicles': False
-        },
+        horizon=1500,
+        additional_params=ADDITIONAL_ENV_PARAMS,
     ),
 
     # network-related parameters (see flow.core.params.NetParams and the
     # network's documentation or ADDITIONAL_NET_PARAMS component)
     net=NetParams(
-        additional_params={
-            "length": 260,
-            "lanes": 1,
-            "speed_limit": 50,
-            "resolution": 40,
-        },
+        additional_params=ADDITIONAL_NET_PARAMS.copy(),
     ),
 
     # vehicles to be placed in the network at the start of a rollout (see
@@ -76,6 +56,6 @@ flow_params = dict(
     # parameters specifying the positioning of vehicles upon initialization/
     # reset (see flow.core.params.InitialConfig)
     initial=InitialConfig(
-        spacing='uniform'
+        bunching=30,
     ),
 )

@@ -18,6 +18,7 @@ def total_lc_reward(env, rl_action):
     ]
     return np.array(reward_list)
 
+
 def rl_action_penalty(env, rl_action):
     if rl_action is None:
         return 0
@@ -27,20 +28,14 @@ def rl_action_penalty(env, rl_action):
 
     rl = env.k.vehicle.get_rl_ids()
     timestep = env.k.vehicle.get_timestep(rl[0])
-    lc_failed = np.array(env.last_lc) == np.array(env.k.vehicle.get_lane(rl))
-    # print(f'[{timestep}] <rl_action_p> : {env.last_lc, env.k.vehicle.get_lane(rl)}, {rl_action[1]}, {lc_failed}')
-    # if sum(lc_failed) and \
-    #         (rl_action[1] < -1+2/3 or rl_action[1] > -1+4/3):
-    if sum(lc_failed):
-        # print(f'[{timestep}] <rl_action_p> : ////////////////////////////////////////{env.last_lc, env.k.vehicle.get_lane(rl)}')
+    lc_failed = (np.array(env.last_lc) == np.array(env.k.vehicle.get_lane(rl)))
+    lc_rl_action = np.array(rl_action[1])-1
+    if isinstance(rl_action, tuple):
+        if any(lc_failed) and any(lc_rl_action):
+            return -action_penalty * sum(lc_failed)
+    elif any(lc_failed) and any(rl_action[1::2]):
         return -action_penalty * sum(lc_failed)
-    else:
-        return 0
-
-    # rl = env.k.vehicle.get_rl_ids()
-    # now_lane = env.k.vehicle.get_lane(rl[0])
-
-
+    return 0
 
 
 def simple_lc_penalty(env):
@@ -49,6 +44,16 @@ def simple_lc_penalty(env):
     for veh_id in env.k.vehicle.get_rl_ids():
         if env.k.vehicle.get_last_lc(veh_id) == env.time_counter:
             reward -= sim_lc_penalty
+
+    # if reward:
+    #     ids = env.k.vehicle.get_ids()
+    #     rls = env.k.vehicle.get_rl_ids()
+    #     leader_to_print = [vid for vid in ids
+    #                        if env.k.vehicle.get_leader(vid) in rls]
+    #     headways = env.k.vehicle.get_lane_headways(leader_to_print)
+    #     tailways = env.k.vehicle.get_lane_tailways(rls)
+    #     my_tailways = [tailways[i][env.k.vehicle.get_lane(rls[i])] for i in range(len(rls))]
+    #     print(f'[{env.k.vehicle.get_lane_followers("rl_0")}]: {headways}, {tailways}, {my_tailways} {env.k.vehicle.get_leader("rl_0")}')
     return reward
 
 
@@ -140,27 +145,38 @@ def unsafe_distance_penalty(env):
         return 0
     get_safe_distance = lambda vid: env.k.vehicle.get_speed(vid) ** 2 / (
             2 * max_decel)
-    base_distance = 3.5
+    base_distance = 5
 
-    for rl_id in env.k.vehicle.get_rl_ids():
-        lane = env.k.vehicle.get_lane(rl_id)
-        leader = env.k.vehicle.get_lane_leaders(rl_id)[lane]
-        follower = env.k.vehicle.get_lane_followers(rl_id)[lane]
-        leader_safe_distance = get_safe_distance(leader) + base_distance
-        follower_safe_distance = get_safe_distance(follower) + base_distance
-        headway = env.k.vehicle.get_headway(rl_id)
-        tailway = env.k.vehicle.get_headway(follower)
-        if headway < leader_safe_distance or tailway < follower_safe_distance:
-            # if headway < leader_safe_distance:
-            #     print(f'[LEADER] : {leader}')
-            #     print(max(leader_safe_distance-headway, 0)/leader_safe_distance)
-            # elif tailway < follower_safe_distance:
-            #     print(f'[FOLLOWER] : {follower}')
-            #     print(max(follower_safe_distance-tailway, 0)/follower_safe_distance)
-            # print(f'lsd : {leader_safe_distance}\t fsd : {follower_safe_distance}\t h : {headway}\t t :{tailway}')
-            penalty = max(leader_safe_distance - headway, 0) / leader_safe_distance \
-                      + max(follower_safe_distance - tailway, 0) / follower_safe_distance
-            reward -= penalty * unsafe_penalty
+    rls = env.k.vehicle.get_rl_ids()
+    lane_tailways = env.k.vehicle.get_lane_tailways(rls)
+    lanes = env.k.vehicle.get_lane(rls)
+    tailways = np.array([lane_tailways[i][lanes[i]] for i in range(len(rls))])
+    lane_followers_speed = env.k.vehicle.get_lane_followers_speed(rls)
+    follower_speed = np.array([lane_followers_speed[i][lanes[i]] for i in range(len(rls))])
+    safe_distances = follower_speed ** 2 / 2*max_decel + base_distance
+    penalties = -unsafe_penalty * max(0, safe_distances - tailways)/safe_distances
+
+    reward = sum(penalties)
+
+    # for rl_id in env.k.vehicle.get_rl_ids():
+    #     lane = env.k.vehicle.get_lane(rl_id)
+    #     leader = env.k.vehicle.get_lane_leaders(rl_id)[lane]
+    #     follower = env.k.vehicle.get_lane_followers(rl_id)[lane]
+    #     leader_safe_distance = get_safe_distance(leader) + base_distance
+    #     follower_safe_distance = get_safe_distance(follower) + base_distance
+    #     headway = env.k.vehicle.get_headway(rl_id)
+    #     tailway = env.k.vehicle.get_headway(follower)
+    #     if headway < leader_safe_distance or tailway < follower_safe_distance:
+    #         # if headway < leader_safe_distance:
+    #         #     print(f'[LEADER] : {leader}')
+    #         #     print(max(leader_safe_distance-headway, 0)/leader_safe_distance)
+    #         # elif tailway < follower_safe_distance:
+    #         #     print(f'[FOLLOWER] : {follower}')
+    #         #     print(max(follower_safe_distance-tailway, 0)/follower_safe_distance)
+    #         # print(f'lsd : {leader_safe_distance}\t fsd : {follower_safe_distance}\t h : {headway}\t t :{tailway}')
+    #         penalty = max(leader_safe_distance - headway, 0) / leader_safe_distance \
+    #                   + max(follower_safe_distance - tailway, 0) / follower_safe_distance
+    #         reward -= penalty * unsafe_penalty
     return reward
 
 
@@ -215,7 +231,7 @@ def desired_velocity(env, fail=False, edge_list=None):
     """
     # bmil edit
     only_rl = env.initial_config.reward_params.get('only_rl')
-    if only_rl is None or only_rl==0:
+    if only_rl is None or (only_rl==0 and type(only_rl) == int):
         return 0
     if edge_list is None:
         veh_ids = env.k.vehicle.get_rl_ids() if only_rl else env.k.vehicle.get_ids()

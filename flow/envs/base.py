@@ -292,19 +292,19 @@ class Env(gym.Env, metaclass=ABCMeta):
 
             self.initial_state[veh_id] = (type_id, edge, lane, pos, speed)
 
-    def _to_lc_action(self, rl_action):
-        if rl_action is None:
-            return rl_action
-
-        for i in range(1, len(rl_action), 2):
-            if rl_action[i] < -1 + 2 / 3:
-                rl_action[i] = -1
-            elif rl_action[i] >= -1 + 4 / 3:
-                rl_action[i] = 1
-            else:
-                rl_action[i] = 0
-
-        return rl_action
+    # def _to_lc_action(self, rl_action):
+    #     if rl_action is None:
+    #         return rl_action
+    #
+    #     for i in range(1, len(rl_action), 2):
+    #         if rl_action[i] < -1 + 2 / 3:
+    #             rl_action[i] = -1
+    #         elif rl_action[i] >= -1 + 4 / 3:
+    #             rl_action[i] = 1
+    #         else:
+    #             rl_action[i] = 0
+    #
+    #     return rl_action
 
     def step(self, rl_actions):
         """Advance the environment by one step.
@@ -339,7 +339,9 @@ class Env(gym.Env, metaclass=ABCMeta):
         # bmil edit
         # print(f'[ACTION] : {rl_actions}')
 
-        rl_actions = self._to_lc_action(rl_actions)
+        # raw_action = rl_actions
+        # rl_actions = self._to_lc_action(rl_actions)
+
 
         for _ in range(self.env_params.sims_per_step):
             self.time_counter += 1
@@ -421,6 +423,13 @@ class Env(gym.Env, metaclass=ABCMeta):
             reward = self.compute_reward(rl_clipped, fail=crash)
         else:
             reward = self.compute_reward(rl_actions, fail=crash)
+
+        # if rl_actions is not None and any(rl_actions):
+        #     print(f'[{self.k.vehicle.get_timestep(self.k.vehicle.get_rl_ids()[0])}] raw: {raw_action[1::2]}\tact: {rl_actions[1::2]},', end='')
+        #     if abs(reward) > 100:
+        #         print(f'\tr: {reward}')
+        #     else:
+        #         print('')
 
         return next_observation, reward, done, infos
 
@@ -611,6 +620,7 @@ class Env(gym.Env, metaclass=ABCMeta):
                 a_min=self.action_space.low,
                 a_max=self.action_space.high)
         elif isinstance(self.action_space, Tuple):
+            rl_actions = list(rl_actions)
             for idx, action in enumerate(rl_actions):
                 subspace = self.action_space[idx]
                 if isinstance(subspace, Box):
