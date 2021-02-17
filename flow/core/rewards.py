@@ -1,7 +1,8 @@
 """A series of reward functions."""
 
 import numpy as np
-
+from flow.envs.base import Env
+from collections import defaultdict
 
 # bmil edit
 def total_lc_reward(env, rl_action):
@@ -198,6 +199,45 @@ def overtake_reward(env):
         env.last_lane_leaders[veh_id] = lane_leaders
 
     return reward
+
+def full_reward(env: Env, rl_action):
+    rls = env.k.vehicle.get_rl_ids()
+    reward = 0
+
+    rl_mean_s = env.initial_config.reward_params.get('rl_mean_speed', 0)
+    simple_lc_p = env.initial_config.reward_params.get('simple_lc_penalty', 0)
+    unsafe_p = env.initial_config.reward_params.get('unsafe_penalty', 0)
+    dc3_p = env.initial_config.reward_params.get('dc3_penalty', 0)
+    rl_action_p = env.initial_config.reward_params.get('rl_action_penalty', 0)
+
+    rwds = defaultdict(int)
+
+    for rl in rls:
+        if rl_mean_s:
+            r = rl_mean_s * env.k.vehicle.get_speed(rl) / env.env_params.additional_params['target_velocity']
+            reward += r
+            rwds['rl_mean_speed'] += r
+        if simple_lc_p and env.time_counter == env.k.vehicle.get_last_lc(rl):
+            reward -= simple_lc_p
+            rwds['simple_lc_penalty'] -= simple_lc_p
+        if unsafe_p and env.k.vehicle.get_tailway(rl) < 5:
+            pen = unsafe_p * (5. - env.k.vehicle.get_tailway(rl))/5.
+            reward -= pen
+            rwds['unsafe_penalty'] -= pen
+        if dc3_p and (env.k.vehicle.get_accel(env.k.vehicle.get_follower(rl)) or 0) < -0.2:
+            pen = dc3_p * np.log(abs(env.k.vehicle.get_accel(env.k.vehicle.get_follower(rl))) + 1)
+            reward -= pen
+            rwds['dc3_penalty'] -= pen
+
+    if rl_action_p:
+        pen = rl_action_penalty(env, rl_action)
+        reward += pen
+        rwds['rl_action_penalty'] += pen
+
+
+    return reward, rwds
+
+
 
 
 def desired_velocity(env, fail=False, edge_list=None):

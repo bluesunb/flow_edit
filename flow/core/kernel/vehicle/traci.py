@@ -651,6 +651,14 @@ class TraCIVehicle(KernelVehicle):
             return [self.get_headway(vehID, error) for vehID in veh_id]
         return self.__vehicles.get(veh_id, {}).get("headway", error)
 
+    def get_tailway(self, veh_id, error=None):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_tailway(vid, error) for vid in veh_id]
+        lane_tailway = self.get_lane_tailways(veh_id)
+        lane = self.get_lane(veh_id)
+        return lane_tailway[lane]
+
+
     def get_last_lc(self, veh_id, error=-1001):
         """See parent class."""
         if isinstance(veh_id, (list, np.ndarray)):
@@ -1044,15 +1052,6 @@ class TraCIVehicle(KernelVehicle):
                     break
                 else:
                     self.kernel_api.vehicle.changeLane(veh_id, int(target_lane), self.sim_step)
-                # print(f'[{timestep}] <traci> before lane : {self.get_lane(rl[0])}')
-                # print(f'[{timestep}] <traci> this, target : {this_lane, int(target_lane)}')
-                # for i in range(10):
-                #     if self.get_lane(veh_id) == target_lane:
-                #         break
-                #     else:
-                #         self.kernel_api.vehicle.changeLane(veh_id, int(target_lane), self.sim_step)
-                # else:
-                #     print(f'[{timestep}] <traci> LC Failed//')
 
                 self.kernel_api.vehicle.changeLane(
                     veh_id, int(target_lane), self.sim_step)

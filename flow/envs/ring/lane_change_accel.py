@@ -6,10 +6,11 @@ from flow.core import rewards
 from gym.spaces.box import Box
 from gym.spaces.tuple import Tuple
 from gym.spaces.multi_discrete import MultiDiscrete
+import matplotlib.pyplot as plt
 
 import numpy as np
 from collections import defaultdict
-import matplotlib.pyplot as plt
+from pprint import pprint
 
 ADDITIONAL_ENV_PARAMS = {
     # maximum acceleration for autonomous vehicles, in m/s^2
@@ -412,7 +413,32 @@ class TestLCEnv(MyLaneChangeAccelEnv):
         return Tuple((Box(np.array(lb), np.array(ub), dtype=np.float32), MultiDiscrete(np.array(lc_b))))
 
     def compute_reward(self, rl_actions, **kwargs):
-        return super().compute_reward(rl_actions, **kwargs)
+        reward, rwds = rewards.full_reward(self, rl_actions)
+        if self.accumulated_reward is None:
+            self.accumulated_reward = defaultdict(int)
+        else:
+            for k in rwds.keys():
+                self.accumulated_reward[k] += rwds[k]
+
+        if self.k.vehicle.get_timestep(self.k.vehicle.get_rl_ids()[0]) % 375000 == 0:
+            print('=== now reward ===')
+            pprint(dict(rwds))
+            print('=== accumulated reward ===')
+            pprint(dict(self.accumulated_reward))
+
+
+        return reward
+
+    # def compute_reward(self, rl_actions, **kwargs):
+    #     humans = self.k.vehicle.get_human_ids()
+    #     accels = np.array([self.k.vehicle.get_accel(h) for h in humans])
+    #     m = 1
+    #     if None not in accels:
+    #         if any(np.abs(accels) > m):
+    #             print('[AC]:', accels[np.where(np.abs(accels) > m)], np.where(np.abs(accels) > m))
+    #             print(f'[DS]: {self.k.vehicle.get_tailway("rl_0")}')
+    #             i = input()
+    #     return super().compute_reward(rl_actions, **kwargs)
 
     def _apply_rl_actions(self, actions):
 
@@ -440,3 +466,30 @@ class TestLCEnv(MyLaneChangeAccelEnv):
 
         self.k.vehicle.apply_acceleration(sorted_rl_ids, acc=acceleration)
         self.k.vehicle.apply_lane_change(sorted_rl_ids, direction=direction)
+
+class X(TestLCEnv):
+
+    def __init__(self, env_params, sim_params, network, simulator='traci'):
+        super().__init__(env_params, sim_params, network, simulator)
+        self.dir = 1
+
+    def compute_reward(self, rl_actions, **kwargs):
+        return np.mean(self.k.vehicle.get_speed(self.k.vehicle.get_ids()))/1000
+
+    def _apply_rl_actions(self, actions):
+        timestep = self.k.vehicle.get_timestep(self.k.vehicle.get_rl_ids()[0])
+        lane = self.k.vehicle.get_lane(self.k.vehicle.get_rl_ids()[0])
+        num_rl = self.k.vehicle.num_rl_vehicles
+        acceleration, raw_direction = actions
+        direction = np.array([d-1 for d in raw_direction])
+        sorted_rl_ids = [veh_id for veh_id in self.sorted_ids if veh_id in self.k.vehicle.get_rl_ids()]
+
+        if timestep%100:
+            self.dir = 0
+        elif self.dir + lane < 0:
+            self.dir = 1
+        elif self.dir + lane >= self.net_params.additional_params["lanes"]:
+            self.dir = -1
+
+        self.k.vehicle.apply_acceleration(sorted_rl_ids, acceleration)
+        self.k.vehicle.apply_lane_change(sorted_rl_ids, [self.dir]*num_rl)
