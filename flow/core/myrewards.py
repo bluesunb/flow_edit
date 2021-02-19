@@ -141,6 +141,7 @@ def unsafe_distance_penalty(env):
 
 
 def full_reward(env, rl_action):
+    "total reward function v2"
     rls = env.k.vehicle.get_rl_ids()
     reward = 0
 
