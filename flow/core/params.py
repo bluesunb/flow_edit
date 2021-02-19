@@ -773,6 +773,7 @@ class InitialConfig:
                  bunching=0,
                  lanes_distribution=float("inf"),
                  edges_distribution="all",
+                 reward_params=None,
                  additional_params=None):
         """Instantiate InitialConfig.
 
@@ -789,6 +790,7 @@ class InitialConfig:
         self.lanes_distribution = lanes_distribution
         self.edges_distribution = edges_distribution
         self.additional_params = additional_params or dict()
+        self.reward_params = reward_params or dict()
 
 
 class SumoCarFollowingParams:
