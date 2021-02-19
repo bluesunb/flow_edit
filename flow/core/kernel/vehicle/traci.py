@@ -547,6 +547,37 @@ class TraCIVehicle(KernelVehicle):
             return [self.get_fuel_consumption(vehID, error) for vehID in veh_id]
         return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_FUELCONSUMPTION, error) * ml_to_gallons
 
+    #bmil edit
+    def get_co2_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_co2_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_CO2EMISSION, error)
+
+    def get_co_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_co_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_COEMISSION, error)
+
+    def get_hc_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_hc_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_HCEMISSION, error)
+
+    def get_pmx_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_pmx_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_PMXEMISSION, error)
+
+    def get_nox_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_nox_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_NOXEMISSION, error)
+
+    def get_noise_emission(self, veh_id, error=-1001):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_noise_emission(vehID, error) for vehID in veh_id]
+        return self.__sumo_obs.get(veh_id, {}).get(tc.VAR_NOISEEMISSION, error)
+
     def get_previous_speed(self, veh_id, error=-1001):
         """See parent class."""
         if isinstance(veh_id, (list, np.ndarray)):
