@@ -647,17 +647,25 @@ class TraCIVehicle(KernelVehicle):
             return [self.get_headway(vehID, error) for vehID in veh_id]
         return self.__vehicles.get(veh_id, {}).get("headway", error)
 
+    def get_tailway(self, veh_id, error=None):
+        if isinstance(veh_id, (list, np.ndarray)):
+            return [self.get_tailway(vid, error) for vid in veh_id]
+        lane_tailway = self.get_lane_tailways(veh_id)
+        lane = self.get_lane(veh_id)
+        return lane_tailway[lane]
+
+
     def get_last_lc(self, veh_id, error=-1001):
         """See parent class."""
         if isinstance(veh_id, (list, np.ndarray)):
-            return [self.get_headway(vehID, error) for vehID in veh_id]
+            return [self.get_last_lc(vehID, error) for vehID in veh_id]
 
         if veh_id not in self.__rl_ids:
             warnings.warn('Vehicle {} is not RL vehicle, "last_lc" term set to'
                           ' {}.'.format(veh_id, error))
             return error
         else:
-            return self.__vehicles.get(veh_id, {}).get("headway", error)
+            return self.__vehicles.get(veh_id, {}).get("last_lc", error)
 
     def get_acc_controller(self, veh_id, error=None):
         """See parent class."""
@@ -716,7 +724,8 @@ class TraCIVehicle(KernelVehicle):
             error = list()
         if isinstance(veh_id, (list, np.ndarray)):
             return [self.get_lane_leaders(vehID, error) for vehID in veh_id]
-        return self.__vehicles[veh_id]["lane_leaders"]
+        # return self.__vehicles[veh_id]["lane_leaders"]
+        return self.__vehicles.get(veh_id, {}).get("lane_leaders", error)
 
     def set_lane_tailways(self, veh_id, lane_tailways):
         """Set the lane tailways of the specified vehicle."""
