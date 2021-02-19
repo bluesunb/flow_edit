@@ -62,7 +62,7 @@ def rl_action_penalty(env, rl_action):
         return 0
 
     rls = env.k.vehicle.get_rl_ids()
-    lc_failed = np.array(env.last_lane) == np.array(env.k.vehicle.get_lane(rl))
+    lc_failed = np.array(env.last_lane) == np.array(env.k.vehicle.get_lane(rls))
     lc_rl_action = np.zeros_like(rl_action)
 
     if isinstance(env.action_space, Box):
