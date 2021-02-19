@@ -496,6 +496,15 @@ class Env(gym.Env, metaclass=ABCMeta):
             type_id, edge, lane_index, pos, speed = \
                 self.initial_state[veh_id]
 
+            # FIXME: Env.k.vehicles.add() 에서 요구하는 파라미터의 타입을 맞춰줘야 합니다.
+            # see the docs: https://sumo.dlr.de/docs/TraCI/Add_Vehicle.html
+            veh_id = str(veh_id)
+            type_id = str(type_id)
+            edge = str(edge)
+            lane_index = str(lane_index)
+            pos = float(pos)
+            speed = float(speed)
+
             try:
                 self.k.vehicle.add(
                     veh_id=veh_id,
@@ -509,7 +518,9 @@ class Env(gym.Env, metaclass=ABCMeta):
                 # now and then reintroduce it
                 self.k.vehicle.remove(veh_id)
                 if self.simulator == 'traci':
-                    self.k.kernel_api.vehicle.remove(veh_id)  # FIXME: hack
+                    # Temporary expedient: kernel_api 에서 호출하면 training 도중 에러 발생
+                    # self.k.kernel_api.vehicle.remove(veh_id)  # FIXME: hack
+                    self.k.vehicle.remove(veh_id)
                 self.k.vehicle.add(
                     veh_id=veh_id,
                     type_id=type_id,
@@ -588,6 +599,7 @@ class Env(gym.Env, metaclass=ABCMeta):
                 a_min=self.action_space.low,
                 a_max=self.action_space.high)
         elif isinstance(self.action_space, Tuple):
+            rl_actions = list(rl_actions)   # Tuple.sample() -> tuple[np.array, np.array...]
             for idx, action in enumerate(rl_actions):
                 subspace = self.action_space[idx]
                 if isinstance(subspace, Box):
