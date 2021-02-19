@@ -17,7 +17,7 @@ class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
     def __init__(self, env_params, sim_params, network, simulator='traci'):
         super().__init__(env_params, sim_params, network, simulator)
         self.accumulated_reward = None
-        self.last_lc = None
+        self.last_lane = None
 
     def _to_lc_action(self, rl_action):
         """Make direction components of rl_action to discrete"""
@@ -38,7 +38,7 @@ class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
         acceleration = actions[::2]
         direction = actions[1::2]
 
-        self.last_lc = self.k.vehicle.get_lane(self.k.vehicle.get_rl_ids())
+        self.last_lane = self.k.vehicle.get_lane(self.k.vehicle.get_rl_ids())
 
         # re-arrange actions according to mapping in observation space
         sorted_rl_ids = [veh_id for veh_id in self.sorted_ids
