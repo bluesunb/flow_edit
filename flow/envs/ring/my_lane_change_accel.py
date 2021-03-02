@@ -97,15 +97,18 @@ class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
         if 'rl_action_penalty' in args:
             if lc_action is not None and self.last_lane == vehicle.get_lane(rls) \
                     and any(lc_action[1::2]):
-                self.log['rl_action_penalty'].append(1)
+                if len(self.log['rl_action_penalty']) == 0:
+                    self.log['rl_action_penalty'].append(0)
+                self.log['rl_action_penalty'][0] += 1
         if 'unsafe_penalty' in args:
             lc_taken = [rl for rl in rls if self.time_counter == vehicle.get_last_lc(rl)]
             if any(lc_taken):
                 self.log['distance_lc_taken'].extend(vehicle.get_tailway(lc_taken))
         if 'dc3_penalty' in args:
-            accels = [vehicle.get_accel(vid) or 0 for vid in vehicle.get_human_ids()]
-            accels = np.array(accels).clip(max=0)
-            self.log['decel'].extend(accels.tolist())
+            if any([self.time_counter < vehicle.get_last_lc(rl)+20 for rl in rls]):
+                accels = [vehicle.get_accel(vid) or 0 for vid in vehicle.get_human_ids()]
+                accels = np.array(accels).clip(max=0)
+                self.log['decel'].extend(accels.tolist())
 
         if 'rl_mean_speed' in args:
             speed = vehicle.get_speed(rls)
@@ -113,15 +116,31 @@ class MyLaneChangeAccelEnv(LaneChangeAccelEnv):
 
         if self.time_counter == self.env_params.horizon \
                 + self.env_params.warmup_steps - 1:
-            print(f'[rlps]: {sum(self.log["rl_action_penalty"])}')
-            # print(f'[avg_distance, std]: {sum(self.log["unsafe_penalty"]) / (len(self.log["unsafe_penalty"]) or float("inf"))}, {np.}')
-            print(f'[avg_distance, std]: {np.mean(self.log["distance_lc_taken"] or 0)}, '
-                  f'{np.std(self.log["distance_lc_taken"] or 0)}')
-            print(f'[num_of_danger_lc]: {sum(np.array(self.log["unsafe_penalty"]) < 5)}')
-            print(f'[min distance]: {min(self.log["distance_lc_taken"] or 0)}')
-            print(f'[avg_decel]: {sum(self.log["dc3_penalty"]) / (len(self.log["dc3_penalty"]) or float("inf"))}')
-            print(f'[num_of_emergency_decel]: {sum(np.array(self.log["dc3_penalty"]) < -1)}')
-            print(f'[rl_mean_speed]: {np.mean(self.log["rl_mean_speed"])}')
+
+            rlps = sum(self.log["rl_action_penalty"])
+            avg_distance = np.mean(self.log["distance_lc_taken"] or 0)
+            std_distance = np.std(self.log["distance_lc_taken"] or 0)
+            num_of_danger_lc = sum(np.array(self.log["distance_lc_taken"]) < 5)
+            min_distance = min(self.log["distance_lc_taken"] or 0)
+            avg_decel = np.mean([self.log["decel"] or 0])
+            std_decel = np.std(self.log["decel"] or 0)
+            num_of_emergency_decel = sum(np.array(self.log["decel"]) < -1)
+            max_decel = min(self.log["decel"] or 0)
+            rl_mean_speed = np.mean(self.log["rl_mean_speed"])
+
+            self.log2 = {'rlps': rlps,
+                         'avg_distance': round(avg_distance, 3),
+                         'std_distance': round(std_distance, 3),
+                         'num_of_danger_lc': num_of_danger_lc,
+                         'min_distance': round(min_distance, 3),
+                         'avg_decel': round(avg_decel, 3),
+                         'std_decel': round(std_decel, 3),
+                         'num_of_emergency_decel': num_of_emergency_decel,
+                         'max_decel': round(max_decel, 3),
+                         'rl_mean_speed': round(rl_mean_speed, 3)
+                         }
+            for k in self.log2:
+                print(f'[{k}]: {self.log2[k]}')
 
 
 class TestLCEnv(MyLaneChangeAccelEnv):

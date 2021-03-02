@@ -87,9 +87,14 @@ def follower_decel_penalty(env):
     for rl in rls:
         follower = env.k.vehicle.get_follower(rl)
         if follower is not None:
-            accel = env.k.vehicle.get_accel(env.k.vehicle.get_follower(rl)) or 0
-            if accel < threshold:
-                f = lambda x: x if x < 1 else np.log(x) + 1
+            follower_accel = env.k.vehicle.get_accel(env.k.vehicle.get_follower(rl)) or 0
+            rl_accel = env.k.vehicle.get_accel(rl) or 0
+            accel = np.array([follower_accel, rl_accel])
+            accel = accel[accel < threshold]
+            if len(accel):
+                def f(x):
+                    x[x>1] = np.log(x[x>1]) + 1
+                    return sum(x)
                 pen = dc3_p * f(abs(2 * accel / max_decel))
                 reward -= pen
 
