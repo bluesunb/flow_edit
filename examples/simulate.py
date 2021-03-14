@@ -50,6 +50,11 @@ def parse_args(args):
         help='Specifies whether to generate an emission file from the '
              'simulation.')
 
+    parser.add_argument(
+        '--plot',
+        action='store_true',
+    )
+
     return parser.parse_known_args(args)[0]
 
 
@@ -90,4 +95,18 @@ if __name__ == "__main__":
     exp = Experiment(flow_params, callables)
 
     # Run for the specified number of rollouts.
-    exp.run(flags.num_runs, convert_to_csv=flags.gen_emission)
+    name = flags.exp_config
+
+    info, log2_stack = exp.run(flags.num_runs, convert_to_csv=flags.gen_emission, flags=flags)
+    from pprint import pprint
+    print(log2_stack)
+    #
+    from time import strftime
+
+    time = strftime('%Y-%m-%d')
+    flow_autonomous_home = os.path.expanduser('~/log/')
+    with open(flow_autonomous_home + f'/log.csv', 'a') as f:
+        keys = ['\"' + str(k) + '\"' for k in log2_stack.keys()]
+        values = ['\"' + str(v) + '\"' for v in log2_stack.values()]
+        f.write('time,name,'+','.join(keys)+'\n')
+        f.write(f'{time},{name}_sim,{",".join(values)}\n')
